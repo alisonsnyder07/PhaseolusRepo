@@ -1,22 +1,13 @@
 # Fitness Modeling of Phaseolus 
 # by Alison, Spring 2024
-
-usethis::use_github()
-
 options(warn=1)
-##have to restart R-- will make a temporary file of all installed packages
-tmp <- installed.packages()
-installedpkgs <- as.vector(tmp[is.na(tmp[,"Priority"]), 1])
-save(installedpkgs, file="installed_old.rda")
-library(installr)
 #### 1. Setup ####
 # Libraries
+library(installr)
 library(naniar) # to homogenize missing value codes
 library(tidyverse) # general data wrangling
 library(supportR)
-librarian::shelf(packReq)
 library(ggplot2)
-install.packages("usethis")
 library(usethis)
 library(ggcorrplot)
 library(ggbiplot)
@@ -56,7 +47,7 @@ install_version("Matrix", version = "1.6-4", repos = "http://cran.us.r-project.o
 
 getwd()
 # Working directory
-setwd("C:/Users/asnyder/Desktop/P. filiformis/MeasurmentData/Data")
+setwd("C:/Users/asnyder/Desktop/P. filiformis/PhaseolusRepo/Data")
 
 # Functions
 '%notin%' <- Negate('%in%')
@@ -67,13 +58,14 @@ AllSA<-read_excel("Pfilifom_data.xlsx",sheet="AllLeafSA")
 water<-read_excel("Pfilifom_data.xlsx",sheet="AverageWater")
 morphdata<-read_excel("Pfilifom_data.xlsx",sheet="NondestructiveMeasurments")
 anothercodesys<-read_excel("Pfilifom_data.xlsx",sheet="anothercode")
+anothercodesyssys<-anothercodesys %>%
+  dplyr::select(-Idnum)
 AllSAmerge <- merge(AllSA,anothercodesys, by="Idnum",all.x=TRUE)
 morphMerge<-merge(morphdata,anothercodesys, by="Idnum",all.x=TRUE)
 codesys<-read_excel("Pfilifom_data.xlsx",sheet="CodeSystem")
 CO2<-read_excel("Pfilifom_data.xlsx",sheet="LeafDataDestruct")
 CO2merge<-merge(CO2,anothercodesys, by="Idnum",all.x=TRUE)
 seeds<-read_excel("Pfilifom_data.xlsx",sheet="SeedData")
-seedsmerge<-merge(seeds,anothercodesys, by="Idnum")
 WUE<-read_excel("Pfilifom_data.xlsx",sheet="WUE")
 PlantDestruct<-read_excel("Pfilifom_data.xlsx",sheet="Destruct")
 SLA<-read_excel("Pfilifom_data.xlsx",sheet="LeafDataDestruct")
@@ -157,6 +149,9 @@ seedsmerge <- seedsmerge %>%
 seedsmerge<- seedsmerge%>%
   dplyr::select(ID,Idnum,Rep,Treatment, ReasonofDeath, Germ, Accession, TotalSeeds,Alive,AverageSeedWeight, TotalPods,AverageSeedsPerPod,EC,Moisture,Numleaves,NumFlowers,NumemptyPods,Numgreenpods,TotalAboveDryMass,AboveWater,WF)
 ###eaten by rats or didnt germinate will be left NA. Only pods with NA will be changed to 0, rest will be NA
+
+write.csv(seedsmerge,"seedsmerge.csv")
+
 seedsmerge <- seedsmerge %>%
   mutate(
     TotalSeeds = case_when(
@@ -198,27 +193,20 @@ seedsmerge <- seedsmerge %>%
     )
   )
 
+
+write.csv(seedsmerge,"seedsmerge.csv")##this is seedsmerge with the correct NA's but does NOT have Rep 3 filled in yet
 fitness<- seedsmerge%>%
   dplyr::select(ID,Idnum,Rep,Treatment, Germ, Accession,Alive,AverageSeedWeight,AverageSeedsPerPod, TotalPods)
-
-tibble::view(fitness)
+fitness<-merge(fitness,anothercodesyssys,by="Accession")
 
 fitnesfili<-fitness%>%
   dplyr::filter(Species=="P. filiformis")
 
 ###Right now only interested in Rep 3 
-anothercodesysSpecies<-anothercodesys%>%
-  dplyr::select(Species,Accession)
-
-fitness<-merge(fitness,anothercodesysSpecies,by="Accession")
-
 rep3 = fitness %>%
   dplyr::select(-Accession)
-
-
 fitness <- fitness %>%
   dplyr::filter(Rep !=3 )
-
 
 #FAKE Data for 3rd rep
 rep3 = fitness %>%
@@ -277,11 +265,7 @@ fili <-fili %>%
   mutate(AverageSeedWeight = ifelse(is.na(AverageSeedWeight), PredicSeedWeight, AverageSeedWeight))
 
 
-view(fili)
-
-
 plot(fitnesmodelSeedWeight)
-hist(fitnesmodelSeedWeight$residuals)
 Anova(fitnesmodelSeedWeight)
 
 ggplot(fili_nz, aes(AverageSeedWeight, PredictedValues)) +
@@ -319,7 +303,7 @@ tibble::view(fili)
 
 hist(fitnesmodelSeedPod$residuals)
 Anova(fitnesmodelSeedPod) # Significant effects without Poisson distribution
-ggplot(fili_nz, aes(Treatment, AverageSeedsPerPod)) +
+ggplot(fili, aes(Treatment, AverageSeedsPerPod)) +
   geom_boxplot() +
   geom_point()
 names(fili)
@@ -332,8 +316,6 @@ ggplot(fili, aes(AverageSeedsPerPod, naPredicSeedPod )) +
 
 
 write.csv(fili,"01fitness.csv")
-
-
 
 
 #5. Looking at PCA####

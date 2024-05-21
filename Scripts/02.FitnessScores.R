@@ -1,6 +1,8 @@
 setwd("C:/Users/asnyder/Desktop/P. filiformis/MeasurmentData/Data")
 
 fili<-read.csv("01fitness.csv")
+seedsmerge<-read.csv("seedsmerge.csv")
+
 tibble::view(fili)
 
 ##Fitness Score--Ratio####
@@ -12,7 +14,7 @@ fitnessscore1$TotalYieldMass <- fitnessscore1$AverageSeedWeight * fitnessscore1$
 fitnessscore1<- fitnessscore1 %>%
   dplyr::select(Idnum,ID ,Rep, Treatment, Germ, Accession, Alive, AverageSeedWeight,AverageSeedsPerPod,TotalPods, TotalYieldMass)
 
-tibble::view(fitnessscore1)
+
 
 ##Average Fitness Long
 
@@ -21,7 +23,6 @@ fitnessyield_averageacrossreps <- fitnessscore1 %>%
   summarise(AverageYieldMass = mean(TotalYieldMass),
             StandardDeviation = sd(TotalYieldMass),
             SE=StandardDeviation/sqrt(n()))
-tibble::view(fitnessyield_averageacrossreps)
 
 ggplot(fitnessyield_averageacrossreps,aes( Treatment, AverageYieldMass, fill=Treatment))+
   geom_bar(stat = "summary", fun = "mean") +
