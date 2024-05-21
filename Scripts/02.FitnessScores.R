@@ -79,10 +79,6 @@ Anova(mod2)
 # check_model(mod2)
 
 
-tst<-fitnessscore1 %>%
-  dplyr::select(Accession) %>%
-  distinct()
-
 saltyieldTolerance<-data.frame(unique(YieldC$Accession))
 saltyieldTolerance <- saltyieldTolerance %>% rename(Accession = unique.YieldC.Accession.)
 
@@ -131,4 +127,13 @@ controlvsalt_yieldR %>% arrange(desc(ST))###putting in decreasing order of ST
 
 ST_df<-data.frame(controlvsalt_yieldR$Accession)
 ST_df$ST<-controlvsalt_yieldR$ST
-names(controlvsalt_yieldR)
+names(ST_df)
+
+ST_df<-ST_df %>%
+  rename(Accession=controlvsalt_yieldR.Accession)
+ST_df$Accession <- factor(ST_df$Accession, levels = ST_df$Accession[order(ST_df$ST, decreasing = FALSE)])
+
+ggplot(ST_df, aes(y=Accession, x=ST, fill=Accession))+ 
+  geom_bar(stat = "identity")+
+  geom_vline(xintercept = 1, color = "red", size = .5)
+
