@@ -1,4 +1,4 @@
-setwd("C:/Users/asnyder/Desktop/P. filiformis/MeasurmentData/Data")
+setwd("C:/Users/asnyder/Desktop/P. filiformis/PhaseolusRepo/Data")
 
 fili<-read.csv("01fitness.csv")
 seedsmerge<-read.csv("seedsmerge.csv")
@@ -61,22 +61,35 @@ controlvsalt_yield
 ###this model is predicting a "score of fitness" for ONLY salt treatment... This is an alternative to predicting the NA values
 mod1S <-lmer(log(TotalYieldMass+0.001) ~ 0+ Accession + (1|Rep), data = fitnessscore1 %>%
               dplyr::filter(Treatment == 'S' & Germ ==1))
+
+
 Anova(mod1S)### There is a significant difference in yield of salt treated accession by accession but not Treatment
+
+
+saltyieldTolerance<-data.frame(unique(YieldC$Accession))
+saltyieldTolerance <- saltyieldTolerance %>% rename(Accession = unique.YieldC.Accession.)
+saltyieldTolerance$saltyieldTolerance<-exp(predict(mod1S, newdata = fitnessscore1 %>%
+                                                     dplyr::select(Accession) %>%
+                                                     distinct(), re.form = NA))-0.001 ###now there is a dataframe for the how much the SALT plants produced -- does not account for control, but looking at overall production of salt plants
+write.csv(saltyieldTolerance,"saltyieldTolerance.csv")
+
 
 mod1C <-lmer(log(TotalYieldMass+0.001) ~ 0+ Accession + (1|Rep), data = fitnessscore1 %>%
                dplyr::filter(Treatment == 'C' & Germ ==1))
 Anova(mod1C)### There is a significant difference in yield of salt treated accession by accession and also Treatment? but it is only control so I am sort of confused on that 
+ControlyieldTolerance<-data.frame(unique(YieldC$Accession))
+ControlyieldTolerance <- ControlyieldTolerance %>% rename(Accession = unique.YieldC.Accession.)
+ControlyieldTolerance$controlyieldTolerance<-(exp(predict(mod1C, newdata = fitnessscore1 %>%
+                                                     dplyr::select(Accession) %>%
+                                                     distinct(), re.form = NA))-0.001) ###error in X %*% fixef(object) : non-conformable arguments
 
 
 ###this is looking at total yield not seperating by treatment 
 mod2<-lmer(log(TotalYieldMass+0.001)~Accession + (1|Rep) + Treatment,data=fitnessscore1)
-Anova(mod2)
+Anova(mod2)## having a hard time understanding this... there is a difference in Accession, but not in treatments?
 
 
-# mod2 <-lmer(TotalYieldMass ~ 0+ Accession + (1|Rep), data = fitnessscore1 %>%
-#               dplyr::filter(Treatment == 'S' & Germ ==1))
-# 
-# check_model(mod2)
+
 
 
 saltyieldTolerance<-data.frame(unique(YieldC$Accession))
@@ -87,6 +100,8 @@ saltyieldTolerance <- saltyieldTolerance %>% rename(Accession = unique.YieldC.Ac
 saltyieldTolerance$saltyieldTolerance<-exp(predict(mod1S, newdata = fitnessscore1 %>%
                                                      dplyr::select(Accession) %>%
                                                      distinct(), re.form = NA))-0.001
+
+
 
 ggplot (fitnessscore1, aes (x=Accession, y=TotalYieldMass, group =interaction(Accession,Treatment), fill = Treatment))+
   geom_boxplot()
@@ -136,4 +151,6 @@ ST_df$Accession <- factor(ST_df$Accession, levels = ST_df$Accession[order(ST_df$
 ggplot(ST_df, aes(y=Accession, x=ST, fill=Accession))+ 
   geom_bar(stat = "identity")+
   geom_vline(xintercept = 1, color = "red", size = .5)
+
+write.csv(ST_df,"YieldST.csv")
 

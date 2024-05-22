@@ -60,6 +60,7 @@ morphdata<-read_excel("Pfilifom_data.xlsx",sheet="NondestructiveMeasurments")
 anothercodesys<-read_excel("Pfilifom_data.xlsx",sheet="anothercode")
 anothercodesyssys<-anothercodesys %>%
   dplyr::select(-Idnum)
+write.csv(anothercodesyssys,"code.csv")
 AllSAmerge <- merge(AllSA,anothercodesys, by="Idnum",all.x=TRUE)
 morphMerge<-merge(morphdata,anothercodesys, by="Idnum",all.x=TRUE)
 codesys<-read_excel("Pfilifom_data.xlsx",sheet="CodeSystem")
@@ -588,115 +589,8 @@ fviz_eig(data.pca, addlabels = TRUE)
 fviz_pca_var(data.pca, col.var = "black")
 
 
+--------------------------------------------------------------------------------------------- #### ect stuff that I don't really know about
 
-
-
-###7 Ggally####--bioclim
-
-
-
-bioclimsd <- bioclimsd %>% rename(Accession = accession)
-##bioclimsd<-merge(bioclimsd,controlvsalt_yieldR, by= "Accession")
-bioclimfili<-bioclimsd %>% 
-  dplyr::filter(species== "P. filiformis")
-         
-bioclimfili$AnnualPrecip<-  bioclimfili$AnnualPrecip[,2]
-bioclimfili$AnnualPrecip<-as.numeric(bioclimfili$AnnualPrecip)
-bioclimfili$Average_temp <-bioclimfili$Average_temp[,1]
-
-
-names(bioclimfili)
-view(sd)
-ggpairs(sd[sample.int(nrow(sd), ncol(sd)), ])
-
-names(bioclimfili)
-bioclimfili <- bioclimfili %>% dplyr::select(-species)
-str(bioclimfili)
-
-
-ncol(bioclimfili)
-
-cor(bioclimfili[,c(2:30)],method="spearman", use = "complete.obs")
-
-
-p_value <- lapply(bioclimfili, function(x) corrplot::cor.mtest(bioclimfili[, 4:12])[["p"]])
-correlation <- lapply(bioclimfili, function(x) cor(x[, 4:12], method = "spearman", use = 'complete.obs'))
-
-###7.PCA for bioclim and terrain####
-
-ncol(bioclimfili)
-
-rownames(corr_matrix)
-corr_matrix <- cor(bioclimfili[,c(2:21)])
-ggcorrplot(corr_matrix)
-
-
-data.pca <- princomp(corr_matrix)
-summary(data.pca)
-
-data.pca$loadings[, 1:2]
-fviz_eig(data.pca, addlabels = TRUE)
-
-fviz_pca_var(data.pca, col.var = "black",title=" PCA of Bioclimactic Variables correlated to Accession's Origin")
-
-###trying vegan package here
-names(bioclimfili)
-bioclimSmallerPCA<-bioclimfili %>%
-  dplyer::select()
-
-
-nrow(bioclimfili)
-pca.out1<-prcomp(bioclimfili[,c(2:21)],scale=TRUE)
-biplot(pca.out)
-
-fviz_pca_biplot(pca.out1, repel = TRUE, select.var = list(contrib = 15))### PCA of 20 bioclimactic variables to pick the top 5 most influential
-
-bioclimfili<-data.frame(bioclimfili)
-
-bioclimSmallerPCA<-subset(bioclimfili,
-  select=c(Mean_Temp_Coolest_Quarter,Temp_Annual_Range,Temperature_seasonality,Precip_Seasonality,AnnualPrecip,Precip_Driest_Quarter,Precip_Wettest_Quarter))### now dataframe of top 7 contributers of PCA, PCA1 and PCA2 explain 90% of the variation!!
-
-pca.out2<-prcomp(bioclimSmallerPCA,scale=TRUE)
-fviz_pca_biplot(pca.out2)
-
-
-diffST<-SDsaltTolerance%>%
-  dplyr::select(Accession,diffST)
-salttolerancePCA<-salttolerancePCA%>%
-  dplyr::select(Accession,STYield)
-
-bioclim$Accession<-bioclimfili$Accession
-scores<-as.data.frame(predict(pca.out2, newdata=bioclimSmallerPCA))
-summary(scores)
-bioclim <- bioclimSmallerPCA %>%
-  mutate(PCA1 = scores$PC1,
-         PCA2=scores$PC2)
-salsd <- salsd %>% rename(Accession = accession)
-elevationsd <- elevationsd %>% rename(Accession = accession)
-bioclim<-merge(salsd,bioclim, by="Accession", all.x=FALSE)
-bioclim<-merge(elevationsd,bioclim,by="Accession",all.x=FALSE)
-bioclim<-merge(salttolerancePCA,bioclim,by="Accession",all.x=TRUE)
-bioclim<-merge(diffST,bioclim,by="Accession",all.x=FALSE)
-bioclim<-merge(saltyieldTolerance,bioclim,by="Accession",all.x=FALSE)
-
-names(bioclim)
-
-
-###model of prediciting values for salt tolerance via SALT YIELD
-
-names(bioclim)
-modelfit1 <- lm (log(STYield) ~ PCA1 + PCA2 + elevation+ Salinity_class,data=bioclim)##slightly significant
-  modelfit1.1<- lm (log(STYield) ~ PCA1,data=bioclim)##nope
-  modelfit1.1<- lm (log(STYield) ~ PCA1,data=bioclim)
-  
-#Signifcant Salt Treatment to Environemnt #######################################
-modelfit2 <- lm (log(saltyieldTolerance) ~PCA1 + PCA2 + elevation+ Salinity_class,data=bioclim)##significant
-  modelfit2.1<-lm(log(saltyieldTolerance) ~PCA1,data=bioclim) ### super significant!!-- PCA1 and saltyieldtolerance
-  modelfit2.2<-lm(log(saltyieldTolerance) ~PCA2,data=bioclim)##slightly significant with PCA2
-  modelfit2.3<-lm(log(saltyieldTolerance) ~elevation,data=bioclim)###not signficant with elevation
-  modelfit2.4<-lm(log(saltyieldTolerance) ~Salinity_class,data=bioclim)## slightly signifcant with salty model-- .07112
--------------------------------------
-modelfit3 <- lm (log(diffST) ~ PCA1 + PCA2 + elevation+ Salinity_class,data=bioclim) ###not significant with anything--?
 
 anova(modelfit2.4)
 
@@ -829,7 +723,7 @@ PCAT_df<-merge(pred_df2T,predseedsperpod_df2T,by="ID",all.y=FALSE,all.x=FALSE)
 PCAT_df<-merge(PCAT_df,AverageSeedWeight_df2T, by="ID")
 
 
-####PCAT_df<-merge(PCAT_df,biomass1T, by="ID")--not until I have all the measurments 
+####PCAT_df<-merge(PCAT_df,biomass1T, by="ID")--not until I have all the measurments -- 
 PCAT_df <- unique(PCAT_df)
 PCAT_df
 PCAT_df<-merge(anothercodesys,PCAT_df,by="Accession")

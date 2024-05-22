@@ -1,0 +1,1341 @@
+---
+title: "DataAnalysis2"
+output: html_document
+date: "2024-02-26"
+---
+
+
+### number of leaves/time -> linear model
+### SA/time -> leaf expansion rate linear model
+### number of flowers? -> i dont know
+### number of pods -> i dont know
+### number of seeds -> havent done yet
+### average weight of seeds ->
+### leaf water
+### Specific Leaf Area
+### root : Shoot
+### [Na+]root:[Na+]tissue
+### [K+]root:[K+]tissue
+### [Na+]root:[K+]tissue
+
+
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(ggpubr)
+library(tidymodels)
+library(tidyverse)
+library(dplyr)
+library(glmnet)
+library(readxl)
+library(agricolae)
+getwd()
+AllSA<-read_excel("Pfilifom_data.xlsx",sheet="AllLeafSA")
+water<-read_excel("Pfilifom_data.xlsx",sheet="AverageWater")
+morphdata<-read_excel("Pfilifom_data.xlsx",sheet="NondestructiveMeasurments")
+anothercodesys<-read_excel("Pfilifom_data.xlsx",sheet="anothercode")
+AllSAmerge <- merge(AllSA,anothercodesys, by="Idnum",all.x=TRUE)
+morphMerge<-merge(morphdata,anothercodesys, by="Idnum",all.x=TRUE)
+write.csv(AllSAmerge,"AllSAmerge.csv")
+write.csv(morphMerge,"Morphmerge.csv")
+codesys<-read_excel("Pfilifom_data.xlsx",sheet="CodeSystem")
+CO2<-read_excel("Pfilifom_data.xlsx",sheet="LeafDataDestruct")
+CO2merge<-merge(CO2,anothercodesys, by="Idnum",all.x=TRUE)
+seeds<-read_excel("Pfilifom_data.xlsx",sheet="SeedData")
+WUE<-read_excel("Pfilifom_data.xlsx",sheet="WUE")
+PlantDestruct<-read_excel("Pfilifom_data.xlsx",sheet="Destruct")
+SLA<-read_excel("Pfilifom_data.xlsx",sheet="LeafDataDestruct")
+SLAmerge<-merge(SLA,anothercodesys, by="Idnum",all.x=TRUE)
+Ion<-read_excel("Pfilifom_data.xlsx",sheet="Ion")
+Ionmerge<-merge(Ion,anothercodesys, by="Idnum",all.x=TRUE)
+##stuff I want as CSV to send to mickey
+write.csv(morphMerge,"morphdata.csv")
+write.csv(AllSAmerge ,"SAdata.csv")
+
+```
+
+```{r}
+names(water)
+morphMerge
+AllSA
+
+AllSAmerge
+Rep2SA
+Rep1SA
+```
+
+
+Here I am trying to see if I can look at the leaf expansion rate of each ID as a whole, or do I need to split the analysis by Rep and or LeafNum
+
+```{r}
+names(AllSA)
+AllSA<-na.omit(AllSA)
+AllSAmerge <- na.omit(AllSAmerge)
+
+
+##Try to see growth of all leaves depending on Species 
+ggplot(AllSAmerge, aes(x = dayoftreatment, y = LeafSurfaceArea, color = Treatment)) +
+  facet_wrap(~ Species*WvC*Rep)+
+  geom_smooth(method="lm")+
+  labs(title = "Leaf Area Expansion over time By Species", x = "Day of Treatment", y = "LeafSurfaceArea ") +
+  theme_minimal()
+
+###MorphMerge
+##Try to see growth of all leaves depending on Species 
+
+morph_filtered <- morphMerge[complete.cases(morphMerge$Species),]
+ggplot(morph_filtered, aes(x = dayoftreatment, y = NumLeaves, color = Treatment)) +
+  facet_wrap(~ Species*WvC*Rep)+
+  geom_point()+
+  geom_smooth(method="lm")+
+  labs(title = "Number of Leaves over time by Species", x = "Day of Treatment", y = "Number of Leaves") +
+  theme_minimal()
+
+
+##Try to see growth of all leaves depending on Species-- Rep1
+ggplot(Rep1SA, aes(x = dayoftreatment, y = LeafSurfaceArea, color = Treatment)) +
+  facet_wrap(~ Species*WvC)+
+  geom_point() +
+  geom_smooth(method="lm")+
+  labs(title = "Leaf Area Expansion over time--Rep1", x = "Day of Treatment", y = "Number of Leaves ") +
+  theme_minimal()
+
+
+
+###Each ID Coefficient off Rep2
+Rep2SA_<- Rep2SA %>%
+  group_by(Idnum, Treatment) %>%
+  summarize(coef = summary(lm(LeafSurfaceArea ~ dayoftreatment))$coefficients[2],
+            r2 = summary(lm(LeafSurfaceArea  ~ dayoftreatment))$r.squared) %>%
+  pivot_wider(names_from = Treatment, values_from = c(coef, r2))
+
+write.csv(Rep2SA_,"LeafexpansionRep2Coef.csv")
+
+###Each ID Coefficient off Rep1
+Rep1SA_<- Rep1SA %>%
+  group_by(Idnum, Treatment) %>%
+  summarize(coef = summary(lm(LeafSurfaceArea ~ dayoftreatment))$coefficients[2],
+            r2 = summary(lm(LeafSurfaceArea  ~ dayoftreatment))$r.squared) %>%
+  pivot_wider(names_from = Treatment, values_from = c(coef, r2))
+
+write.csv(Rep1SA_,"Leafexpansion1SA.csv")
+
+
+
+
+
+```
+
+
+
+
+
+
+
+```{r}
+###Here I took the coefficient from 3 dataframes: one looking at both Rep1 and Rep2 surface area expansion of ALL leaves, change of SA over change of time, then the other is only Rep1, the other Rep2. I want to see if there is a relationship between the ID num of the 2 reps, and if the combined could be a good representation--- I want to write this down because I feel like this won't make sense later****
+
+###Looking at them by whole
+SAcoefficients<-read.csv('AlllllMergedSA.csv')
+names(SAcoefficients)
+SAlmC<-lm(coef_C~ Idnum.x*rep,data=SAcoefficients)
+SAlmS<-lm(coef_S~ Idnum.x*rep,data=SAcoefficients)
+anova(SAlmC)
+anova(SAlmS)
+### They are not--- But after conversation, doesnt matter. Combine the reps .
+
+
+
+```
+
+
+Now I want to see the correlation between each leaf number for an ID in each Rep 
+
+```{r}
+
+
+###Combining the Reps--- this is whats important---seperating them by Rep
+AllSAmerge
+AllSAmerge <- na.omit(AllSAmerge)
+AllSAmerge<-subset(AllSAmerge, !(dayoftreatment == 33))
+
+
+###Combine by leafnum and Rep and Idnum
+RepSA_leaf<- AllSAmerge %>%
+  group_by(Idnum, Treatment, Leafnum,Rep) %>%
+  summarize(coef = summary(lm(LeafSurfaceArea ~ dayoftreatment))$coefficients[2],
+            r2 = summary(lm(LeafSurfaceArea  ~ dayoftreatment))$r.squared) %>%
+  pivot_wider(names_from = Treatment, values_from = c(coef, r2))
+RepSA_leaf
+
+
+
+###Combine by  Rep and Idnum
+RepSA_ <- RepSA_leaf  %>%
+  group_by(Idnum,Rep) %>%
+  summarize(coef_C = mean(coef_C, na.rm = TRUE),
+            coef_S = mean(coef_S, na.rm = TRUE))
+
+ggplot(data = RepSA_ , aes(x=Rep, y = coef_S,color=Rep)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ Idnum) +
+  scale_fill_manual(values = c("C" = "blue", "S" = "red")) +
+  labs(title = "Bargraph of Salt coefficient LER by Rep",
+       x = "Rep", y = "Coefficient_S") +
+  theme_minimal()+
+   theme(strip.text.x = element_text(margin = margin(0, 0, 0, -0.1, "cm")))+
+  ylim(0,.6)
+
+ggplot(data = RepSA_ , aes(x=Rep, y = coef_S,color=Rep)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ Idnum) +
+  scale_fill_manual(values = c("C" = "blue", "S" = "red")) +
+  labs(title = "Bargraph of Salt coefficient LER by Rep",
+       x = "Rep", y = "Coefficient_S") +
+  theme_minimal()+
+   theme(strip.text.x = element_text(margin = margin(0, 0, 0, -0.1, "cm")))+
+  ylim(0,.6)
+
+
+###Combine by Idnum
+IdnumSA_<- RepSA_   %>%
+  group_by(Idnum) %>%
+  summarize(coef_C = mean(coef_C, na.rm = TRUE),
+            coef_S = mean(coef_S, na.rm = TRUE))
+
+
+
+##Seperating Reps--- this is what I did at first BUT NOT IMPORTANT
+
+Rep2SA<-subset(AllSAmerge, Rep==2)
+Rep2SA_leaf<- Rep2SA %>%
+  group_by(Idnum, Treatment, Leafnum) %>%
+  summarize(coef = summary(lm(LeafSurfaceArea ~ dayoftreatment))$coefficients[2],
+            r2 = summary(lm(LeafSurfaceArea  ~ dayoftreatment))$r.squared) %>%
+  pivot_wider(names_from = Treatment, values_from = c(coef, r2))
+Rep2SA_leaf$index<-Rep2SA_leaf$coef_S /Rep2SA_leaf$coef_C
+Rep2SA_leaf<- Rep2SA_leaf %>%
+  group_by(Idnum) %>%
+  summarize(index = mean(index, na.rm = TRUE))
+Rep2SA_leaf<- Rep2SA_leaf[order(-Rep2SA_leaf$index ), ]
+write.csv(Rep2SA_leaf,"LeafExpansioncoef_rep2.csv")
+
+Rep1SA_leaf<-subset(AllSAmerge, Rep==1)
+Rep1SA_leaf<- Rep1SA %>%
+  group_by(Idnum, Treatment, Leafnum) %>%
+  summarize(coef = summary(lm(LeafSurfaceArea ~ dayoftreatment))$coefficients[2],
+            r2 = summary(lm(LeafSurfaceArea  ~ dayoftreatment))$r.squared) %>%
+  pivot_wider(names_from = Treatment, values_from = c(coef, r2))
+
+Rep1SA_leaf$index<-Rep1SA_leaf$coef_S /Rep1SA_leaf$coef_C
+Rep1SA_leaf<- Rep1SA_leaf %>%
+  group_by(Idnum) %>%
+  summarize(index = mean(index, na.rm = TRUE))
+Rep1SA_leaf<- Rep1SA_leaf[order(-Rep1SA_leaf$index ), ]
+
+Rep1SA_leaf<- Rep1SA_leaf[order(-Rep1SA_leaf$index ), ]
+write.csv(Rep1SA_leaf,"LeafExpansioncoef_rep1.csv")
+
+### From this there is a low enough p-value that I will average every leaf coefficient to equal what the ID coef for leaf expansion rate... i.e. Rep=1, ID= 5: leaf 1 coef_c=.25,leaf 2 coef_c=.4,leaf 3, coef_c=.35 , ID= 5 coef_c = .333. What I will do it calculate the index of each leaf (leaf3S/leaf3C) and then average across every ID-- and then will average across rep's 
+LeafExpansionIdnum
+LeafExpansionIdnum <- IdnumSA_
+LeafExpansionIdnum$indexLER <- LeafExpansionIdnum$coef_S / LeafExpansionIdnum$coef_C
+
+LeafExpansionIdnum <- LeafExpansionIdnum[order(-LeafExpansionIdnum$indexLER), ]
+write.csv(LeafExpansionIdnum,"LeafExpansioncoef.csv")
+LeafExpansionIdnum
+
+###Now morph Data
+morphMerge  <- morphMerge[complete.cases(morphMerge$Idnum),]
+MorphLeaf_<- morphMerge %>%
+  group_by(Idnum, Treatment) %>%
+  summarize(coef = summary(lm(NumLeaves ~ dayoftreatment))$coefficients[2],
+            r2 = summary(lm(NumLeaves ~ dayoftreatment))$r.squared) %>%
+  pivot_wider(names_from = Treatment, values_from = c(coef, r2))
+
+MorphLeafbyRep
+
+MorphLeaf_
+MorphLeafbyRep<-morphMerge %>%
+  group_by(Idnum, Treatment, Rep) %>%
+  summarize(coef = summary(lm(NumLeaves ~ dayoftreatment))$coefficients[2],
+            r2 = summary(lm(NumLeaves ~ dayoftreatment))$r.squared) %>%
+  pivot_wider(names_from = Treatment, values_from = c(coef, r2))
+Clmbyleaf<-lm(coef_C~ Idnum*Rep,data=MorphLeafbyRep)
+anova(Clmbyleaf)
+Slmbyleaf<-lm(coef_S~ Idnum*Rep,data=MorphLeafbyRep)
+anova(Slmbyleaf)
+
+
+MorphLeaf_ <- MorphLeaf_[, c("Idnum", "coef_C", "coef_S","r2_C" , "r2_S")]
+MorphLeaf_<-na.omit(MorphLeaf_)
+MorphLeaf_$indexNumLeaves<- MorphLeaf_$coef_S / MorphLeaf_$coef_C
+MorphLeaf_<-na.omit(MorphLeaf_)
+write.csv(MorphLeaf_,"LeafNumCoef.csv")
+MorphLeaf_
+
+```
+
+
+
+```{r}
+
+
+### showing different Rep in Graph
+
+
+
+#SA-- both Reps 
+AllSA_filtered <- AllSAmerge %>% filter((Treatment == "C" & Rep %in% c(1, 2)) | (Treatment == "S" & Rep %in% c(1, 2)))
+AllSA_filtered<-subset(AllSA_filtered, !(dayoftreatment == 33))
+AllSA_filtered
+
+
+ggplot(AllSA_filtered, aes(x = dayoftreatment, y = LeafSurfaceArea, group=interaction(Rep,Idnum,Leafnum,Treatment) ,color=Treatment,linetype=Rep))+
+  geom_point() + 
+  geom_line(size = .75)+
+  facet_wrap(~Idnum + Species)+
+  labs(title = "Leaf Surface Area Over Days of Treatment by Rep. Each line = single leaf, ",
+       x = "Day of Treatment",
+       y = "Leaf Surface Area",color="Treatment") +
+  scale_color_manual(values = c("C" = "blue", "S" = "red"))+
+  theme(strip.text.x = element_text(margin = margin(0, 0, 0, -0.1, "cm")))+
+  ylim(0,20)
+
+####ONLY P. filiformis 
+All_SAPfilif<-subset(AllSA_filtered, AllSA_filtered$Species== "P. filiformis" )
+All_SAPfilif
+ggplot(All_SAPfilif, aes(x = dayoftreatment, y = LeafSurfaceArea, group=interaction(Rep,Idnum,Leafnum,Treatment) ,color=Treatment,linetype=Rep))+
+  geom_point() + 
+  geom_line(size = .75)+
+  facet_wrap(~ Idnum+Species)+
+  labs(title = "Leaf Surface Area Over Days of Treatment by Rep ONLY P.filiformis.
+       Each line = single leaf, ",
+       x = "Day of Treatment",
+       y = "Leaf Surface Area",color="Treatment") +
+  scale_color_manual(values = c("C" = "blue", "S" = "red"))+
+  theme(strip.text.x = element_text(margin = margin(0, 0, 0, -0.1, "cm")))+
+  ylim(0,20)
+
+ggplot(All_SAPfilif, aes(x = dayoftreatment, y = LeafSurfaceArea ,color=Treatment))+
+  geom_point() + 
+  geom_smooth(method="lm")+
+  facet_wrap(~ Idnum+Species)+
+  labs(title = "Leaf Surface Area Over Days of Treatment ONLY P.filiformis.",
+       x = "Day of Treatment",
+       y = "Leaf Surface Area",color="Treatment") +
+  scale_color_manual(values = c("C" = "blue", "S" = "red"))+
+  theme(strip.text.x = element_text(margin = margin(0, 0, 0, -0.1, "cm")))+
+  ylim(0,20)
+
+###Only P.vulgaris
+All_SAPvulgaris<-subset(AllSA_filtered, AllSA_filtered$Species== "P. vulgaris" )
+All_SAPfilif
+ggplot(All_SAPvulgaris, aes(x = dayoftreatment, y = LeafSurfaceArea, group=interaction(Rep,Idnum,Leafnum,Treatment) ,color=Treatment,linetype=Rep))+
+  geom_point() + 
+  geom_line(size = .75)+
+  facet_wrap(~ Idnum+Species+WvC)+
+  labs(title = "Leaf Surface Area Over Days of Treatment ONLY P.vulgaris.
+       Each line = single leaf, ",
+       x = "Day of Treatment",
+       y = "Leaf Surface Area",color="Treatment") +
+  scale_color_manual(values = c("C" = "blue", "S" = "red"))+
+  theme(strip.text.x = element_text(margin = margin(0, 0, 0, -0.1, "cm")))+
+  ylim(0,20)
+
+ggplot(All_SAPvulgaris, aes(x = dayoftreatment, y = LeafSurfaceArea ,color=Treatment))+
+  geom_point() + 
+  geom_smooth(method="lm")+
+  facet_wrap(~ Idnum+Species)+
+  labs(title = "Leaf Surface Area Over Days of Treatment by Rep ONLY P.vulgaris.",
+       x = "Day of Treatment",
+       y = "Leaf Surface Area",color="Treatment") +
+  scale_color_manual(values = c("C" = "blue", "S" = "red"))+
+  theme(strip.text.x = element_text(margin = margin(0, 0, 0, -0.1, "cm")))+
+  ylim(0,20)
+
+
+morphMerge_<-subset(morphMerge, !(Rep == 1 & dayoftreatment == 59))
+morphMerge_<-subset(morphMerge, !(Rep == 3))
+
+morphMerge_
+
+
+####MorphData
+ggplot(morphMerge_, aes(x = dayoftreatment, y = NumLeaves, group=interaction(Rep,Idnum,Treatment), linetype=Rep,color=Treatment)) +
+  geom_point()+ 
+  geom_line() +
+  facet_wrap(~Idnum)+
+  labs(title = "Change of Leaves of Treatment",
+       x = "Day of Treatment",
+       y = "NumberLeaves",color="Treatment") +
+  scale_color_manual(values = c("C" = "blue", "S" = "red"))
+
+morphRep1<-subset(morphMerge_, Rep==1)
+
+
+ggplot(morphRep1, aes(x = dayoftreatment, y = NumLeaves, group=interaction(Rep,Idnum,Treatment), linetype=Rep,color=Treatment)) +
+  geom_smooth(method="lm", se=TRUE)+
+  facet_wrap(~Idnum)+
+  labs(title = "Change of Leaves of Treatment",
+       x = "Day of Treatment",
+       y = "NumberLeaves",color="Treatment") +
+  scale_color_manual(values = c("C" = "blue", "S" = "red"))
+
+##Salt tolerant looking=== ID 4, ID 17, not salt tolerant== ID 31, 32
+
+morph4<- subset(morphMerge_, morphMerge_$Idnum == "04")
+
+
+morph4
+morphMerge_
+ggplot(morph4, aes(x = dayoftreatment, y = NumLeaves, group=interaction(Treatment),color=Treatment)) +
+  geom_smooth(method="lm", se=TRUE)+
+  facet_wrap(~Accession)+
+  labs(title = "Foliage Growth Rate By Treatment for Accession Pl 535303",
+       x = "Day of Treatment",
+       y = "NumberLeaves",color="Treatment") +
+  scale_color_manual(values = c("C" = "blue", "S" = "red"))+
+  theme(panel.grid.major = element_blank(),
+                           panel.grid.minor    =element_blank())
+
+
+morph31<- subset(morphMerge_, morphMerge_$Idnum == "31")
+ggplot(morph31, aes(x = dayoftreatment, y = NumLeaves, group=interaction(Treatment),color=Treatment)) +
+  geom_smooth(method="lm", se=TRUE)+
+  facet_wrap(~Accession)+
+  labs(title = "Foliage Growth Rate By Treatment for Accession G40513",
+       x = "Day of Treatment",
+       y = "NumberLeaves",color="Treatment") +
+  scale_color_manual(values = c("C" = "blue", "S" = "red"))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor    =element_blank())
+morphMerge_
+###Now linear trends
+##SA
+
+ggplot(AllSA, aes(x = dayoftreatment, y = LeafSurfaceArea, group=interaction(Idnum,Leafnum,Treatment,Rep) ,color=Treatment))+
+  geom_smooth(method="lm", se=TRUE)+
+  facet_wrap(~Idnum)+
+  labs(title = "Linear Model Of Leaf Expansion Rate by Accession",
+       x = "Day of Treatment",
+       y = "Leaf Surface Area",color="Treatment") +
+  scale_color_manual(values = c("C" = "blue", "S" = "red"))+
+  ylim(0, 20) 
+
+### ID 24 looking not salt tolerant, ID 28 looking more salt tolerant 
+SAfilif<-subset(AllSAmerge, AllSAmerge$Species== "P. filiformis")
+SAfili
+ggplot(SAfilif, aes(x = dayoftreatment, y = LeafSurfaceArea, group=interaction(Idnum,Leafnum,Treatment,Rep) ,color=Treatment))+
+  geom_smooth(method="lm", se=FALSE)+
+  facet_wrap(~Accession)+
+  labs(title = expression("Linear Model Of Leaf Expansion Rate by Accession and Treatment of " ~ italic("Phaseolus filiformis")),
+       x = "Day of Treatment",
+       y = "Leaf Surface Area",color="Treatment") +
+  scale_color_manual(values = c("C" = "blue", "S" = "red"))+
+  ylim(0, 20) +
+  theme(panel.grid.major = element_blank(),panel.grid.minor    =element_blank())
+
+
+morphMerge_
+
+AllSAmerge<-merge(AllSA,anothercodesys, by="Idnum")
+SA24<-subset(AllSAmerge,AllSAmerge$Idnum=="24")
+
+ggplot(SA24, aes(x = dayoftreatment, y = LeafSurfaceArea,color=Treatment))+
+  geom_smooth(method="lm", se=TRUE)+
+  facet_wrap(~Accession)+
+  labs(title = "Linear Model Of Leaf Expansion Rate by Accession",
+       x = "Day of Treatment",
+       y = "Leaf Surface Area",color="Treatment") +
+  scale_color_manual(values = c("C" = "blue", "S" = "red"))+
+  ylim(0, 20) 
+
+ggplot(SA24, aes(x = dayoftreatment, y = LeafSurfaceArea,color=Treatment))+
+  geom_smooth(method="lm", se=TRUE)+
+  facet_wrap(~Accession)+
+  labs(title = "Linear Model Of Leaf Expansion Rate by Accession",
+       x = "Day of Treatment",
+       y = "Leaf Surface Area",color="Treatment") +
+  scale_color_manual(values = c("C" = "blue", "S" = "red"))+
+  ylim(0, 20) 
+
+SA22<-subset(AllSAmerge,AllSAmerge$Idnum=="22")
+ggplot(SA22, aes(x = dayoftreatment, y = LeafSurfaceArea,color=Treatment))+
+  geom_smooth(method="lm", se=TRUE)+
+  facet_wrap(~Accession)+
+  labs(title = expression("Linear Model Of Leaf Expansion Rate by Treatment for G40700 " ~ italic("Phaseolus filiformis")),
+       x = "Day of Treatment",
+       y = "Leaf Surface Area(cm2)",color="Treatment") +
+  scale_color_manual(values = c("C" = "blue", "S" = "red"),
+                     labels = c("S" = "Salt", "C" = "Control"))+
+  
+  ylim(0, 4)+
+  theme(panel.grid.major = element_blank(),
+        strip.text = element_text(family="Nunito",size = 14),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+    text = element_text(family = "Nunito"),
+    axis.text = element_text(family = "Nunito", size = 14), 
+    legend.text = element_text(family = "Nunito", size = 14), 
+    plot.title = element_text(family = "Nunito", size = 16),
+    axis.title.x = element_text(family = "Nunito",size = 14),
+    axis.title.y = element_text(family = "Nunito",size = 14),
+    legend.title = element_text(family = "Nunito", size = 14))
+
+##morph-leaves
+morphMerge <- subset(morphMerge, !(Rep == 1 & dayoftreatment == 59))
+
+ggplot(morphMerge, aes(x = dayoftreatment, y = NumLeaves, group=interaction(Idnum,Treatment,Rep),color=Treatment,linetype=Rep)) +
+  geom_point()+
+  geom_line()+
+  facet_wrap(~Idnum)+
+  labs(title = "Change of leaves over time by Accession and Rep ",
+       x = "Day of Treatment",
+       y = "NumberLeaves",color="Treatment") +
+  scale_color_manual(values = c("C" = "blue", "S" = "red"))+
+  ylim(0,30)
+
+morphMerge_N3 <- morphMerge %>%
+  filter(Rep != 3)
+ggplot(morphMerge_N3, aes(x = dayoftreatment, y = NumLeaves, group=interaction(Idnum,Treatment),color=Treatment)) +
+  geom_smooth(method="lm")+
+  facet_wrap(~Accession+Species+WvC)+
+  labs(title = "Foliage Growth Rate over Time By Accession and Treatment",
+       x = "Day of Treatment",
+       y = "Number of Leaves",color="Treatment") +
+  theme(strip.text.x = element_text(margin = margin(0, 0, 0, -0.1, "cm")))+
+  scale_color_manual(values = c("C" = "blue", "S" = "red"),
+                     labels = c("S" = "Salt", "C" = "Control"))+
+  ylim(0,25)+
+   theme(panel.grid.major = element_blank(),
+        strip.text = element_text(family="Nunito",size = 8),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+    text = element_text(family = "Nunito",size=10),
+    axis.text = element_text(family = "Nunito", size = 10), 
+    legend.text = element_text(family = "Nunito", size = 10), 
+    plot.title = element_text(family = "Nunito", size = 12),
+    axis.title.x = element_text(family = "Nunito",size = 10),
+    axis.title.y = element_text(family = "Nunito",size = 12),
+    legend.title = element_text(family = "Nunito", size = 12))
+        
+
+###by P.filformis
+morphMergeP.filif <- subset(morphMerge, morphMerge$Species== "P. filiformis")
+morphMerge <- subset(morphMerge, !(Rep == 1 & dayoftreatment == 59))
+
+ggplot(morphMergeP.filif, aes(x = dayoftreatment, y = NumLeaves, group=interaction(Idnum,Treatment),color=Treatment)) +
+  geom_point()+
+  geom_smooth(method="lm")+
+  facet_wrap(~Idnum+Species)+
+  labs(title = "Change of leaves over time by accession ONLY P. filiformis",
+       x = "Day of Treatment",
+       y = "NumberLeaves",color="Treatment") +
+  scale_color_manual(values = c("C" = "blue", "S" = "red"))+
+  theme(strip.text.x = element_text(margin = margin(0, 0, 0, -0.1, "cm")))+
+  ylim(0,20)
+
+
+###by P.vulgaris
+morphMergeP.vulgaris <- subset(morphMerge, morphMerge$Speci3s== "P. vulgaris"  )
+morphMerge <- subset(morphMerge, !(Rep == 1 & dayoftreatment == 59))
+
+ggplot(morphMergeP.vulgaris, aes(x = dayoftreatment, y = NumLeaves, group=interaction(Idnum,Treatment),color=Treatment)) +
+  geom_point()+
+  geom_smooth(method="lm")+
+  facet_wrap(~Idnum+Species+WvC)+
+  labs(title = "Change of leaves over time by accession ONLY P. vulgaris",
+       x = "Day of Treatment",
+       y = "NumberLeaves",color="Treatment") +
+  scale_color_manual(values = c("C" = "blue", "S" = "red")) 
+
+
+```
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+This is for all the graphs for ID 30 that I want to use for my poster
+```{r}
+
+SAid30 <- AllSAmerge %>% filter((Idnum ==30)) 
+SAid30
+
+
+ggplot(SAid30, aes(x = dayoftreatment, y = LeafSurfaceArea, color = Treatment)) +
+  geom_smooth(method = "lm") +
+  labs(title = "Leaf Expansion Number of Accession ID 30",
+       x = "Day of Treatment",
+       y = "Leaf Surface Area") +
+  scale_color_manual(values = c("C" = "blue", "S" = "red")) +  # Specify line colors
+  theme_minimal() 
+
+
+morph30<-morphMerge %>% filter((Idnum ==30)) 
+morph30
+
+ggplot(morph30, aes(x = dayoftreatment, y = NumLeaves, color =Treatment)) +
+  geom_smooth(method="lm")+
+  labs(title = "Foliage growth of Accession ID 30", x = "Day of Treatment", y = "Leaf Surface Area") +
+  theme_minimal()
+
+germdates
+percentage_alive <- germdates %>%
+  group_by(Rep, Species, Treatment,WvC,IDnum) %>%
+  summarise(percentage_alive = mean(Alive == 1))
+percentage_alive
+alive30<-percentage_alive %>% filter((IDnum ==30)) 
+alive30
+
+ggplot(data = alive30, aes(x=Treatment, y = percentage_alive, fill = Treatment)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_manual(values = c("C" = "blue", "S" = "red")) +
+  labs(title = "ID 30 percentage Alive",
+       x = "Treatment", y = "Color")
+
+```
+
+
+
+Morph data stuff
+```{r cars}
+### Doing this for now because so many leaves were taken for tissue collection**
+
+morphMerge[is.na(morphMerge)] <- 0
+
+MorphRep1<- morphMerge[morphMerge$Rep == 1, ]
+
+MorphRep2 <- morphMerge[morphMerge$Rep == 2, ]
+
+
+##Line Via treatment 
+ggplot(MorphRep1, aes(x = dayoftreatment, y = NumLeaves, color = Treatment)) +
+  geom_point() +
+  geom_smooth(method="lm")+
+  labs(title = "Line Graph of NumberLeaces by ID", x = "Day of Treatment", y = "Number of Leaves ") +
+  theme_minimal()
+
+##Lineof every plant--LEAVES
+ggplot(MorphRep1, aes(x = dayoftreatment, y = NumLeaves, color =interaction(Idnum,Treatment))) +
+  geom_point()+
+  geom_line()+
+  labs(title = "Line Graph of NumberLeaves by ID", x = "Day of Treatment", y = "Number of Leaves ") +
+  theme_minimal()
+
+##Lineof every plant--Flowers
+ggplot(MorphRep1, aes(x = dayoftreatment, y = NumFlowers, color =interaction(Idnum,Treatment))) +
+  geom_point()+
+  geom_line()+
+  labs(title = "Line Graph of Number Flowers by ID", x = "Day of Treatment", y = "Number of Leaves ") +
+  theme_minimal()
+
+##Lineof every plant--Pods
+ggplot(MorphRep1, aes(x = dayoftreatment, y = NumberPods, color =interaction(Idnum,Treatment))) +
+  geom_point()+
+  geom_line()+
+  labs(title = "Line Graph of Number Flowers by ID", x = "Day of Treatment", y = "Number of Leaves ") +
+  theme_minimal()
+
+##ID showing treatments  LEAVES
+ggplot(MorphRep1, aes(x = dayoftreatment, y = NumLeaves, color=Treatment)) +
+  geom_smooth(method = "lm", se = T, aes(group=Treatment))+
+  facet_wrap(~ Idnum)+
+  stat_regline_equation( label.x=c(10,10), label.y=c(20,35))+
+  stat_cor(aes(label=..rr.label..), label.x=c(10,10), label.y=c(15,28))+
+  labs(title = "Line Graph of NumberLeaces by ID", x = "Day of Treatment", y = "Number of Leaves ") +
+  theme_minimal()
+
+###Comparing Species Rep1
+ggplot(MorphRep1, aes(x = dayoftreatment, y = NumLeaves, color=Treatment)) +
+  geom_smooth(method = "lm", se = T, aes(group=Treatment))+
+  facet_wrap(~ Species*WvC)+
+  stat_regline_equation( label.x=c(10,10), label.y=c(20,35)) +
+  stat_cor(aes(label=..rr.label..), label.x=c(10,10), label.y=c(15,27))+
+  labs(title = "Leaf Quantity Growth over Time by Species Rep 1", x = "Day of Treatment", y = "Number of Leaves ") +
+  theme_minimal()+
+  scale_y_continuous(limits = c(0, 30))
+
+###Comparing Species Rep2
+ggplot(MorphRep2, aes(x = dayoftreatment, y = NumLeaves, color=Treatment)) +
+  geom_smooth(method = "lm", se = T, aes(group=Treatment))+
+  facet_wrap(~ Species*WvC)+
+  stat_regline_equation( label.x=c(10,10), label.y=c(20,35)) +
+  stat_cor(aes(label=..rr.label..), label.x=c(10,10), label.y=c(15,27))+
+  labs(title = "Leaf Quantity Growth over Time by Species Rep 2 ", x = "Day of Treatment", y = "Number of Leaves ") +
+  theme_minimal()+
+  scale_y_continuous(limits = c(0, 30))
+
+###Coefficients of COMBINED REPS
+MorphLeaf_<- morphMerge %>%
+  group_by(Idnum, Treatment) %>%
+  summarize(coef = summary(lm(NumLeaves ~ dayoftreatment))$coefficients[2],
+            r2 = summary(lm(NumLeaves ~ dayoftreatment))$r.squared) %>%
+  pivot_wider(names_from = Treatment, values_from = c(coef, r2))
+
+MorphLeaf_$indexLeaf <- MorphLeaf_$coef_S / MorphLeaf_$coef_C
+MorphLeaf_ <- MorphLeaf_[order(-MorphLeaf_$indexRLeaf), ]
+names(MorphLeaf_ )[names(MorphLeaf_ ) == "Idnum.x"] <- "Idnum"
+MorphLeaf_<-merge(MorphLeaf1_,anothercodesys, by="Idnum",all.x=TRUE)
+write.csv(MorphLeaf_,"LeafNumCoef.csv")
+
+
+
+###Each ID Coefficient Rep1--LEAVES
+MorphLeaf1_<- MorphRep1 %>%
+  group_by(Idnum, Treatment) %>%
+  summarize(coef = summary(lm(NumLeaves ~ dayoftreatment))$coefficients[2],
+            r2 = summary(lm(NumLeaves ~ dayoftreatment))$r.squared) %>%
+  pivot_wider(names_from = Treatment, values_from = c(coef, r2))
+
+MorphLeaf1_$indexR1Leaf <- MorphLeaf1_$coef_S / MorphLeaf1_$coef_C
+MorphLeaf1_ <- MorphLeaf1_[order(-MorphLeaf1_$indexR1Leaf), ]
+names(MorphLeaf1_ )[names(MorphLeaf1_ ) == "Idnum.x"] <- "Idnum"
+MorphLeaf1_<-merge(MorphLeaf1_,anothercodesys, by="Idnum",all.x=TRUE)
+write.csv(MorphLeaf1_,"Rep1LeafNumCoef.csv")
+
+###Rep2---LEAVES
+ggplot(MorphRep2, aes(x = dayoftreatment, y = NumLeaves, color=Treatment)) +
+  geom_point()+
+  facet_wrap(~ Species*WvC)+
+  stat_regline_equation( label.x=c(10,10), label.y=c(20,28)) +
+  stat_cor(aes(label=..rr.label..), label.x=c(10,10), label.y=c(15,25))+
+  labs(title = "Leaf Quantity Growth over Time by Species", x = "Day of Treatment", y = "Number of Leaves ") +
+  theme_minimal()+
+  scale_y_continuous(limits = c(0, 30))
+
+###EachID Coefficient---LEAVES Rep2
+MorphLeaf2_<- MorphRep2 %>%
+  group_by(Idnum, Treatment) %>%
+  summarize(coef = summary(lm(NumLeaves ~ dayoftreatment))$coefficients[2],
+            r2 = summary(lm(NumLeaves ~ dayoftreatment))$r.squared) %>%
+  pivot_wider(names_from = Treatment, values_from = c(coef, r2))
+MorphLeaf2_$indexR2Leaf <- MorphLeaf2_$coef_S / MorphLeaf2_$coef_C
+MorphLeaf2_ <- MorphLeaf2_[order(-MorphLeaf2_$indexR2Leaf), ]
+names(MorphLeaf2_ )[names(MorphLeaf2_ ) == "Idnum.x"] <- "Idnum"
+MorphLeaf2_<-merge(MorphLeaf2_,anothercodesys, by="Idnum",all.x=TRUE)
+write.csv(MorphLeaf2_,"Rep2LeafNumCoef.csv")
+
+
+
+###What does combined data look like?
+ggplot(morphMerge, aes(x = dayoftreatment, y = NumLeaves, color=Treatment.x)) +
+  geom_smooth(method = "lm", se = T, aes(group=Treatment.x))+
+  facet_wrap(~ Species*WvC)+
+  stat_regline_equation( label.x=c(10,10), label.y=c(20,28))+
+  stat_cor(aes(label=..rr.label..), label.x=c(10,10), label.y=c(15,25))+
+  labs(title = "Leaf Quantity Growth over Time by Species", x = "Day of Treatment", y = "Number of Leaves ") +
+  theme_minimal()+
+  scale_y_continuous(limits = c(0, 30))
+
+lm(MorphLeaf1_~ MorphLeaf2_)
+MorphLeaf2_
+MorphLeaf1_
+
+```
+
+
+
+
+Color
+```{r}
+### I want to make a new dataframe of the averages of all of the colors taken every week.
+
+morphMerge[is.na(morphMerge)] <- 0
+morphMerge
+names(morphMerge)
+morphMerge$Color<-as.numeric(morphMerge$Color)
+average_colors <- morphMerge %>%
+  group_by(Treatment, Idnum,Rep) %>%
+  summarise(avg_color = mean(Color, na.rm = TRUE))
+
+average_colors
+average_colors <- average_colors %>% filter(Idnum != 0)
+
+
+ggplot(data = average_colors, aes(x=Rep, y = avg_color, fill = Treatment)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ Idnum) +
+  scale_fill_manual(values = c("C" = "blue", "S" = "red")) +
+  labs(title = "Bargraph of color by Treatment and Idnum",
+       x = "Treatment", y = "Color") +
+  theme_minimal()+
+   theme(strip.text.x = element_text(margin = margin(0, 0, 0, -0.1, "cm")))
+
+ggplot(data = average_colors, aes(x=Treatment, y = avg_color, fill = Treatment)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ Idnum) +
+  scale_fill_manual(values = c("C" = "blue", "S" = "red")) +
+  labs(title = "Bargraph of color by Treatment and Idnum",
+       x = "Treatment", y = "Color") +
+  theme_minimal()+
+   theme(strip.text.x = element_text(margin = margin(0, 0, 0, -0.1, "cm")))
+
+###Index for color
+average_colors
+df_C <- average_colors %>% filter(Treatment == "C") %>% rename(avg_colorC = avg_color)
+df_C<- df_C %>%
+  group_by(Idnum) %>%
+  summarize(avg_colorC = mean(avg_colorC))
+df_S <- average_colors%>% filter(Treatment == "S")%>% rename(avg_colorS = avg_color)
+df_S<- df_S %>%
+  group_by(Idnum) %>%
+  summarize(avg_colorS = mean(avg_colorS))
+
+color_index <- merge(df_C[, c("Idnum", "avg_colorC")], df_S[, c("Idnum", "avg_colorS")], by = "Idnum")
+color_index$avg_colorC<-color_index$avg_colorC 
+color_index$avg_colorS<-color_index$avg_colorS 
+color_index$colorindex<-color_index$avg_colorC/color_index$avg_colorS
+color_index
+
+ names(df_C) 
+
+lmColor<-lm(Color~ Treatment*Species*Idnum*Rep, data=morphMerge)
+anova(lmColor)
+```
+
+
+testing significance of CO2--- not significant 
+```{r}
+CO2merge
+names(CO2)
+SLACO2<-lm(SLA~ Idnum.x*Treatment.x ,data=CO2merge)
+WaterSLA<-lm(WaterSLA~ Idnum.x*Treatment.x*Species,data=CO2merge)
+CO2SLA<-lm(deltaCO2SLA~ Idnum.x*Treatment.x*Species,data=CO2merge)
+CO2minmax<-lm(deltaCO2minmax~ Idnum.x*Treatment.x*Species,data=CO2merge)
+           
+anova(SLACO2)
+anova(WaterSLA)
+anova(CO2SLA)
+anova(CO2minmax)
+
+
+
+```
+
+
+Making A dataframe of combined Seeds
+
+```{r}
+names(seeds)
+summedSeeds<-0
+summedSeeds <- seeds %>%
+  group_by(ID) %>%
+  summarise(TotalSeeds = sum(NumSeeds, na.rm = TRUE), TotalPods = sum(numpods, na.rm = TRUE), AverageSeedsPerPod = mean(SeedperPod,na.rm=TRUE), AverageSeedWeight = mean(Weightseed,na.rm=TRUE), TotalSeedWeight=mean(SeedsWeight, na.rm=TRUE))
+
+summedSeeds
+
+seedsmerge<-0
+seedsmerge<-merge(summedSeeds,PlantDestruct, by="ID", all.x=TRUE)
+seedsmerge
+names(seedsmerge )
+
+seedsmerge <- seedsmerge%>%
+   mutate(TotalPods = coalesce(TotalPods, 0) + coalesce(Numgreenpods, 0) + coalesce(NumemptyPods, 0))
+seedsmerge$Idnum <- substr(seedsmerge$ID, 1, 2)
+seedsmerge$Treatment <- substr(summedSeeds$ID, nchar(summedSeeds$ID), nchar(summedSeeds$ID))
+seedsmerge$Rep <- substr(seedsmerge$ID, 4, 4)
+seedsmerge
+seedsMerge<-merge(seedsmerge,anothercodesys,by="Idnum")
+seedsMerge
+
+seedsMerge_rep1 <- filter(seedsMerge, seedsMerge$Rep == 1)
+names(seedsMerge_rep1)
+seedsMerge_rep1
+
+
+ggplot(seedsMerge_rep1 , aes( y= TotalSeeds, x= Treatment, fill = Treatment)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ Accession*Species*WvC,labeller = function (labels) {
+               labels <- lapply(labels, as.character)
+               list(do.call(paste, c(labels, list(sep = "\n")))) })+
+  labs(title = "Total Seeds Per Plant By Accesssion, Species, and Treatment ", x = NULL) +
+    scale_fill_manual(values = c("S" = "red", "C" = "blue"),
+                    labels = c("S" = "Salt", "C" = "Control"))+  # Set colors for each Treatment
+  theme(panel.grid.major = element_blank(),
+        strip.text = element_text(family="Nunito",size = 8),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+    text = element_text(family = "Nunito"),
+    axis.text = element_text(family = "Nunito", size = 14), 
+    legend.text = element_text(family = "Nunito", size = 10), 
+    plot.title = element_text(family = "Nunito", size = 14),
+    axis.title.x = element_text(family = "Nunito",size = 12),
+    axis.title.y = element_text(family = "Nunito",size = 12),
+    legend.title = element_text(family = "Nunito", size = 14))
+
+
+names(seedsMerge)
+seedsMerge<-merge(seedsmerge,anothercodesys,by="Idnum")%>%
+  filter(species=="P. filiform")
+nam
+pfiliseedsMerge<-seedsMerge%>%
+  filter(Species=="P. filiformis")
+
+ggplot(pfiliseedsMerge , aes( y= AverageSeedWeight, x= Rep, fill = Treatment)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ Accession.x*Species*WvC,labeller = function (labels) {
+               labels <- lapply(labels, as.character)
+               list(do.call(paste, c(labels, list(sep = "\n")))) })+
+  labs(title = "Average Seeds Weight By Accesssion, Species, and Treatment ", x = NULL) +
+  scale_fill_manual(values = c("S" = "red", "C" = "blue")) +  # Set colors for each Treatment
+  theme(panel.grid.major = element_blank(),
+        strip.text = element_text(family="Nunito",size = 8),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+    text = element_text(family = "Nunito"),
+    axis.text = element_text(family = "Nunito", size = 14), 
+    legend.text = element_text(family = "Nunito", size = 12), 
+    plot.title = element_text(family = "Nunito", size = 16),
+    axis.title.x = element_text(family = "Nunito",size = 14),
+    axis.title.y = element_text(family = "Nunito",size = 14),
+    legend.title = element_text(family = "Nunito", size = 14))
+
+
+
+
+ggplot(seedsMerge_rep1 , aes( y= TotalPods, x= Treatment, fill = Treatment)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ Idnum)+
+  labs(title = "Pods Per Plant By accesssion and ") +
+  scale_fill_manual(values = c("S" = "red", "C" = "blue")) +  # Set colors for each Treatment
+  theme_minimal()
+
+
+
+
+
+
+```
+
+
+
+Looking at destructiv data 
+```{r}
+PlantDestruct
+PlantDestructMerge<-merge(PlantDestruct,anothercodesys, by="Idnum")
+PlantDestructMerge
+
+PfiliDestruct <- PlantDestructMerge[PlantDestructMerge$Species == "P. filiformis", ]
+PfiliDestruct
+PfiliDestruct<- filter(PfiliDestruct, Rep == 1)
+
+names(PlantDestructMerge)  
+
+ggplot(PlantDestructMerge, aes(x = TotalAboveDryMass, y = AboveWater, color = Treatment))+
+  geom_point() + 
+  geom_smooth(method="lm",se=FALSE)+
+  labs(title = "Above ground dry biomass P. filiformis",
+       x = "Total Above Dry Mass",
+       y = "Above Water") +
+  theme_minimal()
+
+names(PfiliDestruct)
+
+ggplot(PfiliDestruct, aes( y= Numleaves, x= Treatment, fill = Treatment)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~Idnum)+# Add points to the scatter plot
+  scale_fill_manual(values = c("S" = "red", "C" = "blue")) + 
+  labs(title = "Number of Leaves on day 95 by ID and Treatment  of P. filiformis",
+       y = "Above Water") +
+  theme_minimal()
+
+ggplot(PlantDestructMerge, aes( y= Numleaves, x= Treatment, fill = Treatment)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~Species)+# Add points to the scatter plot
+  scale_fill_manual(values = c("S" = "red", "C" = "blue")) + 
+  labs(title = "Number of Leaves on day 95 by ID and Treatment  of P. filiformis",
+       y = "Above Water") +
+  theme_minimal()
+
+ggplot(PlantDestructMerge, aes( y= AboveWater, x= Treatment, fill = Treatment)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ Accession*Species,labeller = function (labels) {
+               labels <- lapply(labels, as.character)
+               list(do.call(paste, c(labels, list(sep = "\n")))) })+
+  scale_fill_manual(values = c("S" = "red", "C" = "blue")) + 
+  labs(title = "Above Ground Water Mass by Accession,Species,and Treatment",
+       y = "Above Water") +
+  theme_minimal()
+
+names(PfiliDestruct)
+
+ggplot(PlantDestructMerge, aes( y= TotalAboveDryMass, x= Treatment, fill = Treatment)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ Accession*Species,labeller = function (labels) {
+               labels <- lapply(labels, as.character)
+               list(do.call(paste, c(labels, list(sep = "\n")))) })+
+  scale_fill_manual(values = c("S" = "red", "C" = "blue")) + 
+  labs(title = "Dry Above Ground Biomass by Accession and Treatment",
+       y = "Dry Biomass Above Ground (g)",x=NULL) +
+  theme(panel.grid.major = element_blank(),
+        strip.text = element_text(family="Nunito",size = 8),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+    text = element_text(family = "Nunito"),
+    axis.text = element_text(family = "Nunito", size = 14), 
+    legend.text = element_text(family = "Nunito", size = 10), 
+    plot.title = element_text(family = "Nunito", size = 16),
+    axis.title.x = element_text(family = "Nunito",size = 12),
+    axis.title.y = element_text(family = "Nunito",size = 12),
+    legend.title = element_text(family = "Nunito", size = 14))
+
+
+ggplot(PlantDestructMerge, aes( y= TotalAboveDryMass, x= Treatment, fill = Treatment)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ Species*WvC)+
+  scale_fill_manual(values = c("S" = "red", "C" = "blue")) + 
+  labs(title = "Dry Above Ground Biomass by Species and Treatment",
+       y = "Dry Biomass Above Ground (g)") +
+       theme(panel.grid.major = element_blank(),
+        strip.text = element_text(family="Nunito",size = 12),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        strip.background = element_blank(),
+    text = element_text(family = "Nunito"),
+    axis.text = element_text(family = "Nunito", size = 14), 
+    legend.text = element_text(family = "Nunito", size = 10), 
+    plot.title = element_text(family = "Nunito", size = 18),
+    axis.title.x = element_text(family = "Nunito",size = 12),
+    axis.title.y = element_text(family = "Nunito",size = 12),
+    legend.title = element_text(family = "Nunito", size = 14))
+
+
+
+
+
+
+
+```
+
+
+
+testing significance in SLA
+```{r}
+SLAmerge
+
+names(SLAmerge)
+SLAmerge_Rep1<-filter(SLAmerge, SLAmerge$Rep==1)
+SLAmerge_Rep1
+
+summary_SLAR1 <- SLAmerge_Rep1 %>%
+  group_by(Accession,Treatment) %>%
+  summarise(SLA = mean(SLA),
+            sd_SLA = sd(SLA,na.rm=TRUE),
+            count = n())
+
+summary_SLAR1
+
+ggplot(summary_SLAR1, aes(x = Treatment, y = SLA, fill = Treatment)) +
+  facet_wrap(~Accession)+
+  scale_fill_manual(values = c("S" = "red", "C" = "blue")) + 
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin = SLA - sd_SLA / sqrt(count), ymax = SLA + sd_SLA / sqrt(count)),  # Error bars
+                width = 0.4,                    # Width of the error bars
+                position = position_dodge(0.9)) + 
+  labs(title = "Specific Leaf Area by Accession and Treatment",
+       x = "Treatment",
+       y = "SLA (m2/g)") +
+  theme(# Change font family
+    text = element_text(family = "Nunito"),
+    # Change font size
+    axis.text = element_text(size = ),)
+
+filtered_data <- summary_SLAR1 %>%
+  filter(Accession == "G40700", Treatment == "C")%>%
+  summarise(count = n())
+
+summary_SLAR1
+# Calculate standard deviation of SLA for filtered data
+sd_value <- sd(filtered_data$SLA, na.rm = TRUE)
+sd_value
+
+ggplot(SLAmerge_Rep1, aes(x = Treatment, y = Water, fill = Treatment)) +
+  facet_wrap(~Idnum)+
+  scale_fill_manual(values = c("S" = "red", "C" = "blue")) + 
+  geom_bar(stat = "identity", position = "dodge") +  # Add points to the scatter plot
+  ylim(0, max(SLAmerge_Rep1$Water) * 1.1) + 
+  labs(title = "Leaf Water Content by Species",
+       x = "Treatment",
+       y = "Leaf Water Content (g)") +
+  theme_minimal()
+
+ggplot(SLAmerge_Rep1, aes(x = Treatment, y = WaterSLA, fill = Treatment)) +
+  facet_wrap(~Idnum)+
+  scale_fill_manual(values = c("S" = "red", "C" = "blue")) + 
+  geom_bar(stat = "identity", position = "dodge") +  # Add points to the scatter plot
+  ylim(0, max(SLAmerge_Rep1$Water) * 1.1) + 
+  labs(title = "Leaf Water Content by Species",
+       x = "Treatment",
+       y = "Leaf Water Content (g)") +
+  theme_minimal()
+SLAmerge_Rep1
+
+ggplot(SLAmerge_Rep1, aes(x = Treatment, y = WaterSLA, fill = Treatment)) +
+  facet_wrap(~Species*WvC)+
+  scale_fill_manual(values = c("S" = "red", "C" = "blue")) + 
+  geom_bar(stat = "identity", position = "dodge") + 
+  ylim(0, max(SLAmerge_Rep1$Water) * 1.1) + 
+  labs(title = "Specific Leaf Area with Wet Mass by Species",
+       x = "Treatment",
+       y = "SLA (Wet Mass (g)leaf Surface Area(m2)/SLA (Wet Mass (g)") +
+  theme_minimal()
+
+
+
+ggplot(SLAmerge_Rep1, aes(x = Treatment, y = SLA, fill = Treatment)) +
+  facet_wrap(~Species*WvC)+
+  scale_fill_manual(values = c("S" = "red", "C" = "blue")) + 
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Specific Leaf Area by Species",
+       x = "Treatment",
+       y = "SLA (m2/g)") +
+  scale_fill_manual(values = c("S" = "red", "C" = "blue"),
+                    labels = c("S" = "Salt", "C" = "Control"))+
+  theme(panel.grid.major = element_blank(),
+        strip.background = element_blank(),  
+        strip.text = element_text(family="Nunito",size = 14),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+    text = element_text(family = "Nunito", size = 14),
+    axis.text = element_text(family = "Nunito", size = 14), 
+    legend.text = element_text(family = "Nunito", size = 10), 
+    plot.title = element_text(family = "Nunito", size = 20),
+    axis.title.x = element_text(family = "Nunito",size = 12),
+    axis.title.y = element_text(family = "Nunito",size = 12),
+    legend.title = element_text(family = "Nunito", size = 14))
+
+ggplot(SLAmerge_Rep1, aes(x = Treatment, y =Water, fill = Treatment)) +
+  facet_wrap(~Species*WvC)+
+  scale_fill_manual(values = c("S" = "red", "C" = "blue")) + 
+  geom_bar(stat = "identity", position = "dodge") + 
+  ylim(0, max(SLAmerge_Rep1$Water) * 1.1) + 
+  labs(title = "Leaf Water Content by Species",
+       x = "Treatment",
+       y = "Leaf Water Content (g)") +
+  theme_minimal()
+
+
+
+
+
+
+```
+
+Water Use Efficiency
+```{r}
+WUE<-read_excel("Pfilifom_data.xlsx",sheet="WUE")
+WUE
+na.omit(WUE)
+summary(WUE)
+
+WUE_<- WUE %>%
+  group_by(Idnum, Treatment) %>%
+  summarize(coef = summary(lm(Moisture ~ TimeFromWater))$coefficients[2],
+            r2 = summary(lm(Moisture ~ TimeFromWater))$r.squared) %>%
+  pivot_wider(names_from = Treatment, values_from = c(coef, r2))
+WUE_
+
+ggplot(WUE, aes(x = TimeFromWater, y = Moisture, color=interaction(Idnum,Treatment))) +
+  geom_line()+
+  labs(title = "Soil Moisture over Time by Accession and Treatment ", x = "Time from Water", y = "Soil Moisture ") +
+  theme_minimal()
+
+new_WUE <- filter(WUE, TimeFromWater != 51)
+
+ggplot(new_WUE, aes(x = TimeFromWater, y = EC, color=interaction(Idnum,Treatment))) +
+  geom_line()+
+  labs(title = "Soil EC over Time by Accession and Treatment ", x = "Time from Water", y = "EC ") +
+  theme_minimal()
+
+ggplot(new_WUE, aes(x = TimeFromWater, y = Moisture, color=interaction(Idnum,Treatment))) +
+  geom_line()+
+  labs(title = "Moisture over Time by Accession and Treatment ", x = "Time from Water", y = "% saturation") +
+  theme_minimal()
+
+
+Indexs
+
+```
+
+
+
+
+Looking at Dates 
+
+```{r}
+
+dates<-read_excel("Pfilifom_data.xlsx",sheet="DatesEct")
+
+germdates<-dates %>% filter(Germ== 1)
+germdates
+Alivedates<- dates %>% filter(Alive == 1)
+
+
+### Weeks to Flower
+germdates <- germdates %>% filter(Weekstoflower != 0)
+ggplot(germdates, aes(x = Rep, y = Weekstoflower, fill = Treatment)) +
+  geom_boxplot() +
+  facet_wrap(~ Species*WvC) +
+  labs(title = "Box Plot of WeekstoFlower by Species, Rep, and Treatment") +
+  theme_minimal()
+
+##not by rep
+ggplot(germdates, aes(x = Treatment, y = Weekstoflower, fill = Treatment)) +
+  geom_boxplot() +
+  facet_wrap(~ Species*WvC) +
+  labs(title = "Box Plot of WeekstoFlower by Species, Rep, and Treatment") +
+  theme_minimal()
+
+lmweekstoFlower<-lm(Weekstoflower~Treatment*Rep, data=germdates)
+anova(lmweekstoFlower)
+
+###Weeks to Fruit 
+germdates_fruit <- germdates[complete.cases(germdates$WeekstoFruit),]
+germdates <- germdates %>% filter(WeekstoFruit != 0)
+ggplot(germdates_fruit, aes(x = Rep, y = WeekstoFruit, fill = Treatment)) +
+  geom_boxplot() +
+  facet_wrap(~ Species*WvC) +
+  labs(title = "Box Plot of WeekstoFruit by Species, Rep, and Treatment") +
+  theme_minimal()
+
+lmweekstoFruit<-lm(WeekstoFruit~Treatment*Rep, data=germdates)
+anova(lmweekstoFruit)
+
+
+
+###Alive
+
+view(germdates)
+names(germdates)
+percentage_alive <- germdates %>%
+  filter(Rep!=3) %>%
+  group_by(Species, Treatment,WvC) %>%
+  summarise(percentage_alive = mean(Alive == 1))
+
+pfilifsurvival<- germdates %>%
+  filter(Rep!=3) %>%
+  filter(Species== "P. filiformis") %>%
+  group_by(Accession,Treatment,Species) %>%
+  summarise(percentage_alive = mean(Alive == 1))
+percentage_alive
+
+ggplot(percentage_alive, aes(x = Rep, y = percentage_alive, fill = Treatment)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_manual(values = c("S" = "red", "C" = "blue"))+
+  facet_wrap(~ Species*WvC) +
+  labs(title = "Percent Survival by species,Rep, and Treatment",
+       y = "Percentage Alive") +
+  theme_minimal()
+
+ggplot(percentage_alive, aes(x = Treatment, y = percentage_alive, fill = Treatment)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_manual(values = c("S" = "red", "C" = "blue"))+
+  facet_wrap(~ Species*WvC) +
+  labs(title = "Percent Survival by species,Rep, and Treatment",
+       y = "Percentage Alive") +
+  theme_minimal()
+
+ggplot(pfilifsurvival, aes(x = Treatment, y = percentage_alive, fill = Treatment)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_manual(values = c("S" = "red", "C" = "blue"))+
+  facet_wrap(~ Accession*Species) +
+  labs(title = "Percent Survival by species,Rep, and Treatment",
+       y = "Percentage Alive") +
+  theme_minimal()
+
+
+
+
+
+germdatesN3 <-filter(germdates, !Rep == 3)
+percentage_total3<- germdatesN3%>%
+  group_by(Species, Treatment,WvC) %>%
+  summarise(percentage_alive = mean(Alive == 1))
+percentage_total 
+germdatesN3
+
+percentage_totalN3
+
+ggplot(percentage_total3 , aes(x = Treatment, y = percentage_alive, fill = Treatment)) +
+  facet_wrap(~ Species*WvC) +
+  scale_fill_manual(values = c("S" = "red", "C" = "blue"))+
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Percent Survival by Species and Treatment",
+       y = "Percentage Alive") +
+    scale_fill_manual(values = c("S" = "red", "C" = "blue"),
+                    labels = c("S" = "Salt", "C" = "Control"))+
+   theme(panel.grid.major = element_blank(),
+        strip.background = element_blank(),  
+        strip.text = element_text(family="Nunito",size = 14),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+    text = element_text(family = "Nunito"),
+    axis.text = element_text(family = "Nunito", size = 16), 
+    legend.text = element_text(family = "Nunito", size = 14), 
+    plot.title = element_text(family = "Nunito", size = 16),
+    legend.title = element_text(family = "Nunito", size = 14))
+
+
+
+percentage_idNum<- germdates%>%
+  group_by(Species, Treatment,WvC,IDnum) %>%
+  summarise(percentage_alive = mean(Alive == 1))
+
+percentage_idNum
+
+ggplot(percentage_idNum, aes(x = Treatment, y = percentage_alive, fill = Treatment)) +
+  facet_wrap(~ IDnum+Species) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Percent Survival by species and Treatment",
+       y = "Percentage Alive") +
+  theme(strip.text.x = element_text(margin = margin(0, 0, 0, -0.1, "cm")))+
+  theme_minimal()
+
+###Making coefficients for survival Rate 
+df_C <- percentage_idNum %>% filter(Treatment == "C") %>% rename(PercentAliveC = percentage_alive)
+df_S <- percentage_idNum %>% filter(Treatment == "S")%>% rename(PercentAliveS = percentage_alive)
+survival_index <- merge(df_C[, c("IDnum", "PercentAliveC")], df_S[, c("IDnum", "PercentAliveS")], by = "IDnum")
+survival_index$survivalindex<-survival_index$PercentAliveS/survival_index$PercentAliveC
+names(survival_index)[names(survival_index) == "IDnum"] <- "Idnum"
+survival_index
+
+
+
+```
+  
+
+```{r pressure, echo=FALSE}
+water
+lm_waterEC <- lm(EC ~ DayofTreatment * Treatment * TimeAfterWater *DayofTreatment * Rep, data = water)
+lm_waterMoisture <- lm(Moisture ~ DayofTreatment * Treatment * TimeAfterWater*DayofTreatment  * Rep, data = water)
+lm_waterLeft <- lm(WaterLeft ~ DayofTreatment * Treatment * TimeAfterWater*DayofTreatment * Rep, data = water)
+anova(lm_waterEC)
+anova(lm_waterMoisture)
+anova(lm_waterLeft )
+```
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+### Now I want to make a combined dataframe of the index of both rep leaf expansion and number of leaf growth 
+Indexs <- merge(MorphLeaf_,LeafExpansionIdnum, by = "Idnum", all = TRUE)
+Indexs <- merge(Indexs,survival_index, by = "Idnum", all = TRUE)
+Indexs <- merge(Indexs,color_index, by = "Idnum", all = TRUE)
+color_index$colorindex
+Indexs <- Indexs[, c("Idnum", "indexNumLeaves", "indexLER","survivalindex","colorindex")]
+Indexs$average <- rowMeans(Indexs[, c("indexNumLeaves", "indexLER","survivalindex","colorindex")])
+columns_to_calculate_sd <- c("indexR1Leaf", "indexR2Leaf", "indexR1LER", "indexR2LER")
+Indexs<-merge(Indexs,anothercodesys, by="Idnum",all.x=TRUE)
+Indexs<- Indexs[order(-Indexs$average ), ]
+write.csv(Indexs,"indexs.csv")
+Indexs
+names(Indexs)
+```
