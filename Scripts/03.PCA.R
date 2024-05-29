@@ -9,7 +9,8 @@ saltyieldTolerance<-read.csv("saltyieldTolerance.csv")
 
 bioclimfili<-bioclimsd %>% 
   dplyr::filter(species== "P. filiformis") %>%
-  dplyr::select(-X.1,-AnnualPrecipitation.Accession,-AnnualPrecipitation.AnnualPrecipitation,-species)
+  dplyr::select(-AnnualPrecipitation.Accession,-AnnualPrecipitation.AnnualPrecipitation,-species)
+bioclimfili<-merge(bioclimfili,YieldST, by= "Accession")
 
 ###1. trying ggpairs ####
 ggpairs(bioclimfili[sample.int(nrow(bioclimfili), ncol(bioclimfili), )])
@@ -25,9 +26,9 @@ cor(bioclimfili[,c(4:21)],method="spearman", use = "complete.obs")
 p_value <- lapply(bioclimfili, function(x) corrplot::cor.mtest(bioclimfili[, 4:10])[["p"]])
 correlation <- lapply(bioclimfili, function(x) cor(x[, 4:10], method = "spearman", use = 'complete.obs')) ###Incorrect number of correlations i dont know why-- i dont know what this is doing
 
-
+names(bioclimfili)
 str(bioclimfili)
-corr_matrix <- cor(bioclimfili[,c(3:21)]) ###Loading numbers 
+corr_matrix <- cor(bioclimfili[,c(3:22)]) ###Loading numbers 
 rownames(corr_matrix)
 ggcorrplot(corr_matrix) ###correlation plot
 
@@ -42,12 +43,11 @@ fviz_pca_var(data.pca, col.var = "black",title=" PCA of Bioclimactic Variables c
 ###2. Vegan package ####
 
 nrow(bioclimfili)
-corr_matrix1<-cor(bioclimfili[,c(3:21)])
+corr_matrix1<-cor(bioclimfili[,c(3:22)])
 pca.out1<-prcomp(corr_matrix1)
 biplot(pca.out1)
 fviz_eig(pca.out1, addlabels = TRUE) ##95%
 fviz_pca_biplot(pca.out1, repel = TRUE, select.var = list(contrib = 10))### PCA of 20 bioclimactic variables to pick the top 10 most influential
-
 bioclimfili<-data.frame(bioclimfili)
 bioclimSmallerPCA<-subset(bioclimfili,
                           select=c(Accession,Mean_Temp_Coolest_Quarter,Temp_Annual_Range,Temperature_seasonality,Precip_Seasonality,Annual_Precip,Precip_Driest_Quarter,Precip_Wettest_Quarter,Average_temp,Max_Temp_Warmest_Month,Min_Temp_Coolest_Month,Precip_Driest_Quarter))### now dataframe of top 7 contributers of PCA, PCA1 and PCA2 explain 90% of the variation!!
@@ -57,9 +57,9 @@ fviz_pca_biplot(pca.out2)
 fviz_eig(pca.out2, addlabels = TRUE)###98% variation explained in 2 PC's... BINGO using 11 variables
 
 salttolerancePCA<-YieldST%>%
-  dplyr::select(Accession,ST)
+  dplyr::select(Accession,STYield,STPods,STBiomass)
 
-bioclim$Accession<-bioclimfili$Accession
+bioclimSmallerPCA$Accession<-bioclimfili$Accession
 scores<-as.data.frame(predict(pca.out2, newdata=bioclimSmallerPCA))
 summary(scores)
 bioclim <- bioclimSmallerPCA %>%
@@ -69,32 +69,58 @@ salsd <- salsd %>% rename(Accession = accession)
 elevationsd <- elevationsd %>% rename(Accession = accession)
 bioclim<-merge(salsd,bioclim, by="Accession", all.x=FALSE)
 bioclim<-merge(elevationsd,bioclim,by="Accession",all.x=FALSE)
-bioclim<-merge(salttolerancePCA,bioclim,by="Accession",all.x=TRUE)
+bioclim<-merge(YieldST,bioclim,by="Accession",all.x=TRUE)
 bioclim<-merge(saltyieldTolerance,bioclim,by="Accession",all.x=FALSE)
 names(bioclim)### bioclim now has the 11 bioclim variables, the 2 PC that describe 98% of the variation across the populations, salt index value and elevation###
 
 
 ###how to the two salt variables compare to eachother
-saltytraits<-lm(log(ST)~log(saltyieldTolerance) , data=bioclim)
+names(bioclim)
+saltytraits<-lm(log(STYield)~log(saltyieldToleranceYield) , data=bioclim)
 Anova(saltytraits)### they are not correlated??
 
 
 ##3.model of prediciting values for salt tolerance and bioclim relationship ####
 tibble::view(bioclim)
+##totalYield
 names(bioclim)
-modelfit1 <- lm (log(ST) ~ PCA1 + PCA2 + elevation+ Salinity_class,data=bioclim)##slightly significant with PCA1 and salinity_class
-modelfit1.1<- lm (log(ST) ~ PCA1,data=bioclim)##nope
-modelfit1.2<- lm (log(ST) ~ PCA2,data=bioclim) 
-modelfit1.3<- lm (log(ST) ~ Salinity_class,data=bioclim) ##nope
-Anova(modelfit1.3)
+modelfit1 <- lm (log(STYield) ~ PCA1 + PCA2 + elevation+ Salinity_class,data=bioclim)
+modelfit1.1<- lm (log(STYield) ~ PCA1,data=bioclim)##nope
+modelfit1.2<- lm (log(STYield) ~ PCA2,data=bioclim) 
+modelfit1.3<- lm (log(STYield) ~ Salinity_class,data=bioclim) ##YES, p-values: .00151
+Anova(modelfit1.1)
+
+##totalYield
+names(bioclim)
+modelfit2 <- lm (log(STPods) ~ PCA1 + PCA2 + elevation+ Salinity_class,data=bioclim)
+modelfit2.1<- lm (log(STPods) ~ PCA1,data=bioclim)##nope
+modelfit2.2<- lm (log(STPods) ~ PCA2,data=bioclim) 
+modelfit2.3<- lm (log(STPods) ~ Salinity_class,data=bioclim) ##YES, p-values: .01737
+Anova(modelfit2.3)
+
+##totalBiomass
+names(bioclim)
+modelfit3 <- lm (log(STBiomass) ~ PCA1 + PCA2 + elevation+ Salinity_class,data=bioclim)
+modelfit3.1<- lm (log(STBiomass) ~ PCA1,data=bioclim)
+modelfit3.2<- lm (log(STBiomass) ~ PCA2,data=bioclim) ##.001582!! 
+modelfit3.3<- lm (log(STBiomass) ~ Salinity_class,data=bioclim) ##YES, p-values: .01407
+Anova(modelfit3.3)
+
+ggplot(bioclim, aes(x= STBiomass, y=PCA2 ))+
+  geom_point() ## positive relationship-- higher PCA2, higher STBiomass
+
+ggplot(bioclim, aes(x=STBiomass, y= Salinity_class))+
+  geom_bar(stat = "identity")
+
+
 
 #Signifcant Salt Treatment to Environemnt-- not taking into account control #######################################
-modelfit2 <- lm (log(saltyieldTolerance) ~PCA1 + PCA2 + elevation+ Salinity_class,data=bioclim)
-modelfit2.1<-lm(log(saltyieldTolerance) ~PCA1,data=bioclim) ##p-value=.0633
-modelfit2.2<-lm(log(saltyieldTolerance) ~PCA2,data=bioclim)##.3853
-modelfit2.3<-lm(log(saltyieldTolerance) ~elevation,data=bioclim)### .749
-modelfit2.4<-lm(log(saltyieldTolerance) ~Salinity_class,data=bioclim)##.2821
-anova(modelfit2)
+modelfit2 <- lm (log(saltyieldToleranceYield) ~PCA1 + PCA2 + elevation+ Salinity_class,data=bioclim)
+modelfit2.1<-lm(log(saltyieldToleranceYield) ~PCA1,data=bioclim) 
+modelfit2.2<-lm(log(saltyieldToleranceYield) ~PCA2,data=bioclim
+modelfit2.3<-lm(log(saltyieldToleranceYield) ~elevation,data=bioclim)
+modelfit2.4<-lm(log(saltyieldToleranceYield) ~Salinity_class,data=bioclim)
+anova(modelfit2.4) ### none are statistically significant?
 
 
 --------------------------------------------------------------- ###dont know
