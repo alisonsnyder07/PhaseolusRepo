@@ -14,21 +14,8 @@ bioclimfili<-bioclimsd %>%
   dplyr::select(-AnnualPrecip.AnnualPrecipitation,-AnnualPrecip.Accession,-species)
 bioclimfili<-merge(bioclimfili,YieldST, by= "Accession")
 
-###1. trying ggpairs ####
-ggpairs(bioclimfili[sample.int(nrow(bioclimfili), ncol(bioclimfili), )])
 
-names(bioclimfili)
-bioclimfili <- bioclimfili %>% dplyr::select(-species)
-str(bioclimfili)
-ncol(bioclimfili)
-
-cor(bioclimfili[,c(4:21)],method="spearman", use = "complete.obs")
-
-
-p_value <- lapply(bioclimfili, function(x) corrplot::cor.mtest(bioclimfili[, 4:10])[["p"]])
-correlation <- lapply(bioclimfili, function(x) cor(x[, 4:10], method = "spearman", use = 'complete.obs')) ###Incorrect number of correlations i dont know why-- i dont know what this is doing
-
-names(bioclimfili)
+##ggcorplot idk 
 str(bioclimfili)
 corr_matrix <- cor(bioclimfili[,c(3:22)]) ###Loading numbers 
 rownames(corr_matrix)
@@ -52,17 +39,25 @@ fviz_eig(pca.out1, addlabels = TRUE) ##95%
 fviz_pca_biplot(pca.out1, repel = TRUE, select.var = list(contrib = 10))### PCA of 20 bioclimactic variables to pick the top 10 most influential
 bioclimfili<-data.frame(bioclimfili)
 bioclimSmallerPCA<-subset(bioclimfili,
-                          select=c(Accession,Mean_Temp_Coolest_Quarter,Temp_Annual_Range,Temperature_seasonality,Precip_Seasonality,Annual_Precip,Precip_Driest_Quarter,Precip_Wettest_Quarter,Average_temp,Max_Temp_Warmest_Month,Min_Temp_Coolest_Month,Precip_Driest_Quarter,Lat))### now dataframe of top 7 contributers of PCA, PCA1 and PCA2 explain 90% of the variation!!
+                          select=c(Accession,Mean_Temp_Coolest_Quarter,Temp_Annual_Range,Temperature_seasonality,Precip_Seasonality,Annual_Precip,Precip_Driest_Quarter,Average_temp,Max_Temp_Warmest_Month,Min_Temp_Coolest_Month,Precip_Driest_Quarter,Lat))### now dataframe of top 7 contributers of PCA, PCA1 and PCA2 explain 90% of the variation!!
 corr_matrix2<-cor(bioclimSmallerPCA[,c(2:12)])
 pca.out2<-prcomp(corr_matrix2)
-fviz_pca_biplot(pca.out2)
-fviz_eig(pca.out2, addlabels = TRUE)###98% variation explained in 2 PC's... BINGO using 11 variables
+fviz_pca_biplot(pca.out1)
+fviz_eig(pca.out1, addlabels = TRUE)###98% variation explained in 2 PC's... BINGO using 11 variables
+
+##get the loadings of the first PC's
+loadings <-pca.out2$rotation
+print(loadings)
+
+##PC1 is split on temp seasonality and how dry its gets
+##PC2 is mostly precipitation (51%), Driest Quarter(29%), and Precip Seasonality(17%)
 
 salttolerancePCA<-YieldST%>%
   dplyr::select(Accession,STYield,STPods,STBiomass)
 
 bioclimSmallerPCA$Accession<-bioclimfili$Accession
 scores<-as.data.frame(predict(pca.out2, newdata=bioclimSmallerPCA))
+scores
 summary(scores)
 bioclim <- bioclimSmallerPCA %>%
   mutate(PCA1 = scores$PC1,
@@ -79,7 +74,7 @@ names(bioclim)### bioclim now has the 11 bioclim variables, the 2 PC that descri
 ###how to the two salt variables compare to eachother
 tibble::view(bioclim)
 saltytraits<-lm(log(STYield)~(saltyieldToleranceYield) , data=bioclim)
-Anova(saltytraits)### p-value: .02596--makes sense
+anova(saltytraits)### p-value: .02596--makes sense
 
 
 
@@ -91,11 +86,11 @@ tibble::view(bioclim)
 ##totalYield
 names(bioclim)
 modelfit1 <- lm (log(STYield) ~ PCA1 + PCA2 + elevation+ Salinity_class,data=bioclim)
-modelfit1.1<- lm (log(STYield) ~ PCA1,data=bioclim) ### YES! p-value= .002492
+modelfit1.1<- lm (log(STYield) ~ PCA1,data=bioclim) ### YES! p-value= .001474
 modelfit1.2<- lm (log(STYield) ~ PCA2,data=bioclim) ###no 
 modelfit1.3<- lm ((STYield) ~ Salinity_class,data=bioclim) ## p-value=.6245--- without the average seeds/pod YES, p-values: .00151 
 modelfit1.4<- lm (log(STYield) ~ Lat,data=bioclim) ## p-values: 0.02483
-Anova(modelfit1.2)
+Anova(modelfit1.1)
 
 ##totalYield
 names(bioclim)
@@ -144,6 +139,8 @@ modelfit4.4<-lm(log(saltyieldToleranceYield) ~Salinity_class,data=bioclim) ###no
 modelfit4.5<-lm(log(saltyieldToleranceYield) ~Lat,data=bioclim) ###yes: p-value: .047
 Anova(modelfit4.5) ### none are statistically significant?
 
+forposterST<-merge(bioclim,bioclimsd, by="Accession")
+write.csv(forposterST, "Results.csv")
 
 
 
