@@ -9,7 +9,14 @@ tibble::view(fili)
 
 ##adding a fitness measurement of pods*seeds/pod*mass/seed
 fitnessscore1 <- fili
-fitnessscore1$TotalYieldMass <- fitnessscore1$AverageSeedWeight * fitnessscore1$AverageSeedsPerPod * fitnessscore1$TotalPods
+fitnessscore1$TotalYieldMass <- fitnessscore1$AverageSeedWeight * fitnessscore1$TotalPods *fitnessscore1$AverageSeedsPerPod
+
+
+ggplot(fitnessscore1, aes(x=log(AverageSeedsPerPod)))+
+  geom_histogram()
+
+
+
 
 fitnessscore1<- fitnessscore1 %>%
   dplyr::select(Idnum,ID ,Rep, Treatment, Germ, Accession, Alive,TotalAboveDryMass, AverageSeedWeight,AverageSeedsPerPod,TotalPods, TotalYieldMass)
@@ -37,7 +44,7 @@ ggplot(fitnessyield_averageacrossreps,aes( Treatment, AverageYieldMass, fill=Tre
   geom_bar(stat = "summary", fun = "mean") +
   facet_wrap(~Accession)+
   geom_errorbar(data=fitnessyield_averageacrossreps,
-                aes(x = Treatment, ymin = AverageYieldMass-SE, ymax = AverageYieldMass + SE),
+                aes(x = Treatment, ymin = AverageYieldMass-SEY, ymax = AverageYieldMass + SEY),
                 width = 0) +
   scale_fill_manual(values = c("S" = "red", "C" = "blue"))+ # Add error bars
   labs(title = "Difference In Total Mass Yield (g yield) by Phaseolus filiformis Accession and Treatmenst",
@@ -90,12 +97,12 @@ names(controlvsalt_yield)
 ###this model is predicting a "score of fitness" for ONLY salt treatment... This is an alternative to predicting the NA values
 mod1S <-lmer(log(TotalYieldMass+0.001) ~ 0+ Accession + (1|Rep), data = fitnessscore1 %>%
               dplyr::filter(Treatment == 'S' & Germ ==1))
-Anova(mod1S)##not significant
+Anova(mod1S)##VERY significatn 
 
 ##looking at only total pods
 mod1SPods <-lmer((TotalPods+0.001) ~ 0+ Accession + (1|Rep), data = fitnessscore1 %>%
                dplyr::filter(Treatment == 'S' & Germ ==1))
-Anova(mod1SPods)## SIGNIFICANT IF NOT LOG RELATIONSHIP
+Anova(mod1SPods)## SIGNIFICANT with and without log 
 
 ##looking at biomass
 mod1SBiomass <-lmer(log(TotalAboveDryMass+0.001) ~ 0+ Accession + (1|Rep), data = fitnessscore1 %>%
@@ -119,7 +126,7 @@ write.csv(saltyieldTolerance,"saltyieldTolerance.csv")
 
 mod1C <-lmer(log(TotalYieldMass+0.001) ~ 0+ Accession + (1|Rep), data = fitnessscore1 %>%
                dplyr::filter(Treatment == 'C' & Germ ==1))
-Anova(mod1C)### There is a significant difference in yield of salt treated accession by accession and also Treatment? but it is only control so I am sort of confused on that 
+Anova(mod1C) 
 ControlyieldTolerance<-data.frame(unique(YieldC$Accession))
 ControlyieldTolerance <- ControlyieldTolerance %>% rename(Accession = unique.YieldC.Accession.)
 ControlyieldTolerance$controlyieldTolerance<-(exp(predict(mod1C, newdata = fitnessscore1 %>%
@@ -129,7 +136,7 @@ ControlyieldTolerance$controlyieldTolerance<-(exp(predict(mod1C, newdata = fitne
 
 ###this is looking at total yield not seperating by treatment 
 mod2<-lmer(log(TotalYieldMass+0.001)~Accession + (1|Rep) + Treatment,data=fitnessscore1)
-Anova(mod2)## having a hard time understanding this... there is a difference in Accession, but not in treatments?
+Anova(mod2)
 
 
 
@@ -168,25 +175,26 @@ controlvsalt_yieldR <- controlvsalt_yield %>%
           
 
 ggplot(controlvsalt_yieldR, aes(x=AverageYieldMass_C, y=AverageYieldMass_S, color=Accession))+ 
-  geom_errorbar(data=controlvsalt_yieldR, aes(xmin=(AverageYieldMass_C -SEC), 
-                                              xmax=(AverageYieldMass_C+SEC),###I don't knnow why error bars aren't showing up
-                                              ymin=(AverageYieldMass_S-SES), 
-                                              ymax=(AverageYieldMass_S-SES)))+
+  geom_errorbar(data=controlvsalt_yieldR, aes(xmin=(AverageYieldMass_C -SECY), 
+                                              xmax=(AverageYieldMass_C+SECY),###I don't knnow why error bars aren't showing up
+                                              ymin=(AverageYieldMass_S-SESY), 
+                                              ymax=(AverageYieldMass_S-SESY)))+
+  ylim(0,25)+
   geom_point()+
   geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red")
 
 
 
+tibble::view(controlvsalt_yieldR)
+controlvsalt_yieldR$STYield<- ifelse(controlvsalt_yieldR$AverageYieldMass_C == 0, 0, controlvsalt_yieldR$AverageYieldMass_S/controlvsalt_yieldR$AverageYieldMass_C)
+controlvsalt_yieldR$STPods<-ifelse(controlvsalt_yieldR$AveragePods_C == 0, 0, controlvsalt_yieldR$AveragePods_S/controlvsalt_yieldR$AveragePods_C)
+controlvsalt_yieldR$STBiomass<-ifelse(controlvsalt_yieldR$AverageBiomass_C== 0, 0, controlvsalt_yieldR$AverageBiomass_S/controlvsalt_yieldR$AverageBiomass_C)
 
-controlvsalt_yieldR$STYield<-controlvsalt_yieldR$AverageYieldMass_S/controlvsalt_yieldR$AverageYieldMass_C
-controlvsalt_yieldR$STPods<-controlvsalt_yieldR$AveragePods_S/controlvsalt_yieldR$AveragePods_C
-controlvsalt_yieldR$STBiomass<-controlvsalt_yieldR$AverageBiomass_S/controlvsalt_yieldR$AverageBiomass_C
-
-fitnessanova1<-lm(AverageYieldMass~Accession+Treatment, data=fitnessyield_averageacrossreps)
-anova(fitnessanova1)##highly correlated across accessions but not treatment?? i dont understand that 
+fitnessanova1<-lm(log(AverageYieldMass)~Accession+Treatment, data=fitnessyield_averageacrossreps)
+anova(fitnessanova1) ###relationship between treatment???
 
 fitnessanova2<-lm(AveragePods~Accession+Treatment, data=fitnessyield_averageacrossreps)
-anova(fitnessanova2) ###highly correlated across TREATMENT but NOT ACCESSION
+anova(fitnessanova2) ###highly correlated across TREATMENT and ACCESSIONS
 
 fitnessanova3<-lm(AverageBiomass~Accession+Treatment, data=fitnessyield_averageacrossreps)
 anova(fitnessanova3) ###highly correlated across TREATMENT AND ACCESSION
@@ -202,13 +210,12 @@ ST_df<-data.frame(controlvsalt_yieldR$Accession)
 ST_df$STYield<-controlvsalt_yieldR$STYield
 ST_df$STPods<-controlvsalt_yieldR$STPods
 ST_df$STBiomass<-controlvsalt_yieldR$STBiomass
+names(ST_df)[names(ST_df) == "controlvsalt_yieldR.Accession"] <- "Accession"
+names(ST_df)
 
+ST_df$Accession <- factor(ST_df$Accession, levels = ST_df$Accession[order(ST_df$STYield, decreasing = FALSE)])
 
-ST_df<-ST_df %>%
-  rename(Accession=controlvsalt_yieldR.Accession)
-ST_df$Accession <- factor(ST_df$Accession, levels = ST_df$Accession[order(ST_df$ST, decreasing = FALSE)])
-
-ggplot(ST_df, aes(y=Accession, x=ST, fill=Accession))+ 
+ggplot(ST_df, aes(y=Accession, x=STYield, fill=Accession))+ 
   geom_bar(stat = "identity")+
   geom_vline(xintercept = 1, color = "red", size = .5)
 

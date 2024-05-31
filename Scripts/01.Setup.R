@@ -3,12 +3,6 @@
 
 usethis::use_github()
 
-options(warn=1)
-##have to restart R-- will make a temporary file of all installed packages
-tmp <- installed.packages()
-installedpkgs <- as.vector(tmp[is.na(tmp[,"Priority"]), 1])
-save(installedpkgs, file="installed_old.rda")
-library(installr)
 #### 1. Setup ####
 # Libraries
 library(naniar) # to homogenize missing value codes
@@ -142,12 +136,15 @@ precipcoldestquarter<-raster("wc2.1_2.5m_bio_19.tif")
 
 #-- all of those that did not GERMINATE or were eaten by RATS will get NA values. All that died will get 0's 
 summedSeeds<-0
+tibble::view(seedsmerge)
 summedSeeds <- seeds %>%
   group_by(ID) %>%
-  summarise(TotalSeeds = sum(NumSeeds, na.rm = TRUE), TotalPods = sum(numpods, na.rm = TRUE), AverageSeedsPerPod = mean(SeedperPod,na.rm=TRUE), AverageSeedWeight = mean(Weightseed,na.rm=TRUE), TotalSeedWeight=mean(SeedsWeight, na.rm=TRUE))
+  summarise(TotalSeeds = sum(NumSeeds, na.rm = TRUE), Pods = sum(numpods, na.rm = TRUE), AverageSeedsPerPod = mean(SeedperPod,na.rm=TRUE), AverageSeedWeight = mean(Weightseed,na.rm=TRUE), TotalSeedWeight=mean(SeedsWeight, na.rm=TRUE))
 summedSeeds
 seedsmerge<-0
 seedsmerge<-merge(summedSeeds,PlantDestruct, by="ID", all=TRUE)
+names(seedsmerge)
+seedsmerge$TotalPods<-seedsmerge$Pods+seedsmerge$NumemptyPods+seedsmerge$Numgreenpods
 names(seedsmerge)
 seedsmerge<- seedsmerge%>%
   dplyr::select(ID,TotalSeeds,TotalPods,AverageSeedsPerPod,AverageSeedWeight,EC,Moisture,Numleaves,NumFlowers,NumemptyPods,Numgreenpods,TotalAboveDryMass,AboveWater,WF)
@@ -156,7 +153,7 @@ seedsmerge<-merge(seedsmerge,dates,by="ID",all=TRUE)
 seedsmerge <- seedsmerge %>%
   rename(Idnum = IDnum)
 seedsmerge<- seedsmerge%>%
-  dplyr::select(ID,Idnum,Rep,Treatment, ReasonofDeath, Germ, Accession, TotalSeeds,Alive,AverageSeedWeight, TotalPods,AverageSeedsPerPod,EC,Moisture,Numleaves,NumFlowers,NumemptyPods,Numgreenpods,TotalAboveDryMass,AboveWater,WF)
+  dplyr::select(ID,Idnum,Species, Rep,Treatment, ReasonofDeath, Germ, Accession, TotalSeeds,Alive,AverageSeedWeight, TotalPods,AverageSeedsPerPod,EC,Moisture,Numleaves,NumFlowers,NumemptyPods,Numgreenpods,TotalAboveDryMass,AboveWater,WF)
 ###eaten by rats or didnt germinate will be left NA. Only pods with NA will be changed to 0, rest will be NA
 seedsmerge <- seedsmerge %>%
   mutate(
@@ -170,7 +167,6 @@ seedsmerge <- seedsmerge %>%
       Germ == 0 | ReasonofDeath == "RATS" ~ NA,
       Germ == 1 & Alive == 0 & (TotalPods == 0| is.na(TotalPods)) ~ 0,
       Germ==1 &Alive==1 & (is.na(TotalPods)| TotalPods>0) & is.na(TotalPods)~ 0,
-      Germ==1 &Alive==1 & (is.na(AverageSeedWeight) & TotalPods>0) ~ 0,
       TRUE ~ TotalPods
     ),
     AverageSeedWeight = case_when(
@@ -200,9 +196,7 @@ seedsmerge <- seedsmerge %>%
   )
 
 fitness<- seedsmerge%>%
-  dplyr::select(ID,Idnum,Rep,Treatment, Germ, Accession,Alive,AverageSeedWeight,AverageSeedsPerPod, TotalPods)
-
-tibble::view(fitness)
+  dplyr::select(ID,Idnum,Rep,Treatment, Germ, Accession,Alive,AverageSeedWeight,AverageSeedsPerPod, TotalPods,TotalAboveDryMass,Species)
 
 fitnesfili<-fitness%>%
   dplyr::filter(Species=="P. filiformis")
@@ -258,11 +252,11 @@ anothercodesysSpecies<-anothercodesys%>%
 
 
 fili<-fitness%>%
-  dplyr::filter(Species=="P. filiformis")
+  dplyr::filter(Species.x=="P. filiformis")
 
 tibble::view(fili)
 
-#### 2. Predict NA's ####
+#### 3. Predict NA's ####
 
 # How many zeros are there?
 view(fili)
@@ -285,7 +279,7 @@ plot(fitnesmodelSeedWeight)
 hist(fitnesmodelSeedWeight$residuals)
 Anova(fitnesmodelSeedWeight)
 
-ggplot(fili_nz, aes(AverageSeedWeight, PredictedValues)) +
+ggplot(fili, aes(AverageSeedWeight, PredicSeedWeight)) +
   geom_point() +
   geom_smooth(method = "lm") +
   labs(x = "Observed values",
@@ -320,7 +314,7 @@ tibble::view(fili)
 
 hist(fitnesmodelSeedPod$residuals)
 Anova(fitnesmodelSeedPod) # Significant effects without Poisson distribution
-ggplot(fili_nz, aes(Treatment, AverageSeedsPerPod)) +
+ggplot(fili, aes(Treatment, AverageSeedsPerPod)) +
   geom_boxplot() +
   geom_point()
 names(fili)
@@ -332,16 +326,22 @@ ggplot(fili, aes(AverageSeedsPerPod, naPredicSeedPod )) +
        y = "Predicted values")
 
 
+### Above Ground Biomass
+fitnesmodelBiomass<-lmer(log(TotalAboveDryMass)~Accession+Treatment+ (1|Rep),data=fili ,na.action = "na.exclude")
+
+fili <-fili %>%
+  mutate(naTotalAboveDryMass = exp(predict (fitnesmodelBiomass, newdata = fili))) %>%
+  mutate(TotalAboveDryMass = ifelse(is.na(TotalAboveDryMass), naTotalAboveDryMass, TotalAboveDryMass))
+tibble::view(fili)
+
 write.csv(fili,"01fitness.csv")
+tibble::view(fili)
 
 
 
 
-#5. Looking at PCA####
-## looking at above ground biomas, number of seeds, seed weight, number seeds/pod
-
-##atteptwithmixedmodel--- neet 3 reps 
-
+#4. Looking at PCA as a fitness Score ####
+## Need to redo with new data--- didn't save :(
 
 
 ##regular anova
@@ -433,7 +433,7 @@ data.pca$loadings[, 1:2]
 fviz_eig(data.pca, addlabels = TRUE)
 fviz_pca_var(data.pca, col.var = "black")
 
-###6. Terrain and Bioclim####
+###5. Terrain and Bioclim####
 bioclimsd<-0
 
 ###Stacking similar plots
@@ -511,6 +511,12 @@ salsd$Salinity_class<-sal_at_coords
 salsd
 
 ##bioclim
+
+bioclimsd$Lat<-gps$Lat
+bioclimsd$Long<-gps$Long
+
+
+
 Mean_diurnal_range<- terra::extract(meandiurnalrange,gps_coords)
 bioclimsd$Mean_Diurnal_Range<-Mean_diurnal_range
 
@@ -595,10 +601,17 @@ flow_dirr<-terra::terrain(elev,"flowdir")
 flow_dirre<-terra::extract(flow_dirr,gps_coords)
 sd$flow_direction<-flow_dirre
 
-bioclimsd####finalized terrain dataframe####
+tibble::view(bioclimsd)
+
+write.csv(bioclimsd, "bioclimsd.csv")
 
 
-###7 Ggally####--bioclim
+
+
+####finalized terrain dataframe####
+
+
+###6 Ggally####--bioclim
 bioclimsd
 names(bioclimsd)
 
