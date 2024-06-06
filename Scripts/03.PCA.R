@@ -87,12 +87,21 @@ tibble::view(bioclim)
 names(bioclim)
 modelfit1 <- lm (log(STYield) ~ PCA1 + PCA2 + elevation+ Salinity_class,data=bioclim)
 modelfit1.1<- lm (log(STYield) ~ PCA1,data=bioclim) ### YES! p-value= .001474
+modelfit1.12<-lm (log(STYield) ~ Annual_Precip,data=bioclim)
 modelfit1.2<- lm (log(STYield) ~ PCA2,data=bioclim) ###no 
 modelfit1.3<- lm ((STYield) ~ Salinity_class,data=bioclim) ## p-value=.6245--- without the average seeds/pod YES, p-values: .00151 
 modelfit1.4<- lm (log(STYield) ~ Lat,data=bioclim) ## p-values: 0.02483
-Anova(modelfit1.1)
+anova(modelfit1.12)
 
-##totalYield
+
+ggplot(bioclim, aes(x=STYield, y = PCA1))+
+  geom_point()
+
+## outliers.... how do I fix those...
+
+dcr_app(bioclim)
+
+##totalPods
 names(bioclim)
 modelfit2 <- lm (log(STPods) ~ PCA1 + PCA2 + elevation+ Salinity_class,data=bioclim)
 modelfit2.1<- lm (log(STPods) ~ PCA1,data=bioclim) ### YES p-value: .002282

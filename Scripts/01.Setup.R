@@ -313,6 +313,7 @@ tibble::view(fili)
 
 
 hist(fitnesmodelSeedPod$residuals)
+
 Anova(fitnesmodelSeedPod) # Significant effects without Poisson distribution
 ggplot(fili, aes(Treatment, AverageSeedsPerPod)) +
   geom_boxplot() +
@@ -356,7 +357,7 @@ est_Pods <- predict(anovapods, pred_df)
 pred_df$est_Pods <-est_Pods
 
 pred_df
-pred_df2<-pred_df%>% filter(Rep==2)
+pred_df2<-pred_df%>% dplyr::filter(Rep==2)
 pred_df2
 
 pred_df2
@@ -668,7 +669,7 @@ bioclimSmallerPCA<-bioclimfili %>%
 
 nrow(bioclimfili)
 pca.out1<-prcomp(bioclimfili[,c(2:21)],scale=TRUE)
-biplot(pca.out)
+biplot(pca.out1)
 
 fviz_pca_biplot(pca.out1, repel = TRUE, select.var = list(contrib = 15))### PCA of 20 bioclimactic variables to pick the top 5 most influential
 
