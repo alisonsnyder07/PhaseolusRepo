@@ -6,6 +6,7 @@ bioclimsd <- bioclimsd %>% dplyr::rename(Accession = accession) %>%  dplyr::rena
 YieldST<-read.csv("YieldST.csv")
 code<-read.csv("code.csv")
 saltyieldTolerance<-read.csv("saltyieldTolerance.csv")
+STbyrep<-read.csv("STbyRep.csv")
 
 
 names(bioclimf)
@@ -86,16 +87,19 @@ tibble::view(bioclim)
 ##totalYield
 names(bioclim)
 modelfit1 <- lm (log(STYield) ~ PCA1 + PCA2 + elevation+ Salinity_class,data=bioclim)
-modelfit1.1<- lm (log(STYield) ~ PCA1,data=bioclim) ### YES! p-value= .001474
+modelfit1.1<- lm (log(STYield)~ log(PCA1),data=bioclim) ### YES! p-value= .001474
 modelfit1.12<-lm (log(STYield) ~ Annual_Precip,data=bioclim)
 modelfit1.2<- lm (log(STYield) ~ PCA2,data=bioclim) ###no 
 modelfit1.3<- lm ((STYield) ~ Salinity_class,data=bioclim) ## p-value=.6245--- without the average seeds/pod YES, p-values: .00151 
 modelfit1.4<- lm (log(STYield) ~ Lat,data=bioclim) ## p-values: 0.02483
-anova(modelfit1.12)
+anova(modelfit1)
 
 
-ggplot(bioclim, aes(x=STYield, y = PCA1))+
-  geom_point()
+ggplot(bioclim, aes(x=log(STYield), y = PCA2))+
+  geom_point()+
+  geom_smooth(method="lm", se=FALSE)+
+  stat_regline_equation(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~~")),
+                        label.x = -1, label.y = 0)
 
 ## outliers.... how do I fix those...
 
@@ -109,7 +113,7 @@ modelfit2.2<- lm (log(STPods) ~ PCA2,data=bioclim) ##no
 modelfit2.3<- lm (log(STPods) ~ Salinity_class,data=bioclim) ### YES p-value: .03141
 modelfit2.4<- lm (log(STPods) ~ Lat,data=bioclim) ### YES, p-value: .02687
 modelfit2.5<- lm (log(STPods) ~ elevation,data=bioclim) ##no
-Anova(modelfit2.4)
+Anova(modelfit2)
 
 ggplot(bioclim, aes( x= STYield, y = Lat))+
   geom_point()
@@ -146,10 +150,31 @@ modelfit4.2<-lm(log(saltyieldToleranceYield) ~PCA2,data=bioclim) ###no
 modelfit4.3<-lm(log(saltyieldToleranceYield) ~elevation,data=bioclim) ##no
 modelfit4.4<-lm(log(saltyieldToleranceYield) ~Salinity_class,data=bioclim) ###no-- so the total production of salty fruit is not correlated with the salt class--- BUT salt tolerance when looking at yield IS correlated with salt class??
 modelfit4.5<-lm(log(saltyieldToleranceYield) ~Lat,data=bioclim) ###yes: p-value: .047
-Anova(modelfit4.5) ### none are statistically significant?
+Anova(modelfit4.4) ### none are statistically significant?
 
 forposterST<-merge(bioclim,bioclimsd, by="Accession")
 write.csv(forposterST, "Results.csv")
+
+
+
+
+
+####I want to look at significance when seperating reps 
+
+bioclim<- bioclimSmallerPCA %>%
+  mutate(PCA1 = scores$PC1,
+         PCA2=scores$PC2)
+bioclim<-merge(salsd,bioclim, by="Accession", all.x=FALSE)
+bioclim<-merge(elevationsd,bioclim,by="Accession",all.x=FALSE)
+bioclim<-merge(bioclim,STbyrep,by="Accession",all.x=TRUE)
+bioclim<-merge(saltyieldTolerance,bioclim,by="Accession",all.x=FALSE)
+tibble::view(STbyrep)
+
+
+
+
+
+
 
 
 
@@ -202,7 +227,8 @@ g <- g + theme(legend.direction = 'horizontal',
 
 
 #example
-p_ <- GGally::print_if_interactive
+p
+_ <- GGally::print_if_interactive
 df_x <- rnorm(100)
 df_y <- df_x + rnorm(100, 0, 0.1)
 df <- data.frame(x = df_x, y = df_y, c = sqrt(df_x^2 + df_y^2))
