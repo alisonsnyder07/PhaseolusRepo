@@ -1,109 +1,89 @@
+#1. Set Up ####
 setwd("C:/Users/asnyder/Desktop/P. filiformis/PhaseolusRepo/Data")
 
 bioclimsd<-read.csv("bioclimsd.csv")
 seedsmerge<-read.csv("seedsmerge.csv")
-bioclimsd <- bioclimsd %>% dplyr::rename(Accession = accession) %>%  dplyr::rename(Idnum=X)
 YieldST<-read.csv("YieldST.csv")
 code<-read.csv("code.csv")
 saltyieldTolerance<-read.csv("saltyieldTolerance.csv")
 STbyrep<-read.csv("STbyRep.csv")
+GPSformap<-merge(gps,YieldST, by = "Accession")
 
-
-names(bioclimf)
 bioclimfili<-bioclimsd %>% 
   dplyr::filter(species== "P. filiformis") %>%
   dplyr::select(-AnnualPrecip.AnnualPrecipitation,-AnnualPrecip.Accession,-species)
 bioclimfili<-merge(bioclimfili,YieldST, by= "Accession")
 
-
-##ggcorplot idk 
-str(bioclimfili)
-corr_matrix <- cor(bioclimfili[,c(3:22)]) ###Loading numbers 
-rownames(corr_matrix)
-ggcorrplot(corr_matrix) ###correlation plot
-
-
-data.pca <- princomp(corr_matrix)
-summary(data.pca)
-
-data.pca$loadings[, 1:2] ##96% of variation is explained in the 2 principle components
-fviz_eig(data.pca, addlabels = TRUE)
-fviz_pca_var(data.pca, col.var = "black",title=" PCA of Bioclimactic Variables correlated to Accession's Origin")
+names(bioclimfili)
 
 ###2. Vegan package ####
-names(bioclimfili)
-ncol(bioclimfili)
-corr_matrix1<-cor(bioclimfili[,c(3:23)])
+corr_matrix1<-cor(bioclimfili[,c(3:24)])
 pca.out1<-prcomp(corr_matrix1)
 biplot(pca.out1)
 fviz_eig(pca.out1, addlabels = TRUE) ##95%
 fviz_pca_biplot(pca.out1, repel = TRUE, select.var = list(contrib = 10))### PCA of 20 bioclimactic variables to pick the top 10 most influential
+
+
+
 bioclimfili<-data.frame(bioclimfili)
+
 bioclimSmallerPCA<-subset(bioclimfili,
-                          select=c(Accession,Mean_Temp_Coolest_Quarter,Temp_Annual_Range,Temperature_seasonality,Precip_Seasonality,Annual_Precip,Precip_Driest_Quarter,Average_temp,Max_Temp_Warmest_Month,Min_Temp_Coolest_Month,Precip_Driest_Quarter,Lat))### now dataframe of top 7 contributers of PCA, PCA1 and PCA2 explain 90% of the variation!!
-corr_matrix2<-cor(bioclimSmallerPCA[,c(2:12)])
+                          select=c(Accession,Mean_Temp_Coolest_Quarter,Temp_Annual_Range,Temperature_seasonality,Precip_Seasonality,Annual_Precip,Precip_Driest_Quarter,Average_temp,Max_Temp_Warmest_Month,Min_Temp_Coolest_Month,Isothermality, Precip_Driest_Quarter,Lat,Salinity_class,elevation, STYield,STPods))# STBiomass))### now dataframe of top 7 contributers of PCA, PCA1 and PCA2 explain 90% of the variation!!
+corr_matrix2<-cor(bioclimSmallerPCA[,c(2:13)])
 pca.out2<-prcomp(corr_matrix2)
-fviz_pca_biplot(pca.out1)
-fviz_eig(pca.out1, addlabels = TRUE)###98% variation explained in 2 PC's... BINGO using 11 variables
+fviz_pca_biplot(pca.out2)
+fviz_eig(pca.out2, addlabels = TRUE)###most of variation is in first PCA--- I want to use the bioclim variables for the PCA 
 
 ##get the loadings of the first PC's
-loadings <-pca.out2$rotation
+loadings <-pca.out1$rotation
 print(loadings)
 
 ##PC1 is split on temp seasonality and how dry its gets
 ##PC2 is mostly precipitation (51%), Driest Quarter(29%), and Precip Seasonality(17%)
 
 salttolerancePCA<-YieldST%>%
-  dplyr::select(Accession,STYield,STPods,STBiomass)
+  dplyr::select(Accession,STYield,STPods)
 
 bioclimSmallerPCA$Accession<-bioclimfili$Accession
-scores<-as.data.frame(predict(pca.out2, newdata=bioclimSmallerPCA))
+scores<-as.data.frame(predict(pca.out1, newdata=bioclimfili))
 scores
 summary(scores)
-bioclim <- bioclimSmallerPCA %>%
+
+bioclim <- bioclimfili %>%
   mutate(PCA1 = scores$PC1,
          PCA2=scores$PC2)
-salsd <- salsd %>% rename(Accession = accession)
-elevationsd <- elevationsd %>% rename(Accession = accession)
-bioclim<-merge(salsd,bioclim, by="Accession", all.x=FALSE)
-bioclim<-merge(elevationsd,bioclim,by="Accession",all.x=FALSE)
-bioclim<-merge(YieldST,bioclim,by="Accession",all.x=TRUE)
 bioclim<-merge(saltyieldTolerance,bioclim,by="Accession",all.x=FALSE)
 names(bioclim)### bioclim now has the 11 bioclim variables, the 2 PC that describe 98% of the variation across the populations, salt index value and elevation###
 
 
 ###how to the two salt variables compare to eachother
 tibble::view(bioclim)
-saltytraits<-lm(log(STYield)~(saltyieldToleranceYield) , data=bioclim)
-anova(saltytraits)### p-value: .02596--makes sense
+saltytraits<-lm(STYield~(saltyieldToleranceYield) , data=bioclim)
+anova(saltytraits)### p-value: .0034--makes sense, ST yeild is very correlated with saltyieldTolerance 
 
 
 
-STparam<-lm(log(STYield)~(STPods) , data=bioclim)
-Anova(STparam)##extremely correlated
+STparam<-lm(log(STYield)~log(STPods) , data=bioclim)
+Anova(STparam)##extremely correlated, good 
 
 ##3.model of prediciting values for salt tolerance and bioclim relationship ####
-tibble::view(bioclim)
+
 ##totalYield
-names(bioclim)
+tibble::view(bioclim)
 modelfit1 <- lm (log(STYield) ~ PCA1 + PCA2 + elevation+ Salinity_class,data=bioclim)
-modelfit1.1<- lm (log(STYield)~ log(PCA1),data=bioclim) ### YES! p-value= .001474
+modelfit1.1<- lm (log(STYield)~ PCA1,data=bioclim) 
 modelfit1.12<-lm (log(STYield) ~ Annual_Precip,data=bioclim)
-modelfit1.2<- lm (log(STYield) ~ PCA2,data=bioclim) ###no 
-modelfit1.3<- lm ((STYield) ~ Salinity_class,data=bioclim) ## p-value=.6245--- without the average seeds/pod YES, p-values: .00151 
-modelfit1.4<- lm (log(STYield) ~ Lat,data=bioclim) ## p-values: 0.02483
+modelfit1.2<- lm (log(STYield) ~ PCA2,data=bioclim) 
+modelfit1.3<- lm ((STYield) ~ Salinity_class,data=bioclim)
+modelfit1.4<- lm (log(STYield) ~ Lat,data=bioclim) 
 anova(modelfit1)
 
 
-ggplot(bioclim, aes(x=log(STYield), y = PCA2))+
+ggplot(bioclim, aes(x=log(STYield), y = Lat))+
   geom_point()+
   geom_smooth(method="lm", se=FALSE)+
   stat_regline_equation(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~~")),
                         label.x = -1, label.y = 0)
-
-## outliers.... how do I fix those...
-
-dcr_app(bioclim)
 
 ##totalPods
 names(bioclim)
@@ -143,16 +123,16 @@ ggplot(bioclim, aes(x=STBiomass, y= Salinity_class))+
 
 
 
-#Signifcant Salt Treatment to Environemnt-- not taking into account control #######################################
-modelfit4 <- lm (log(saltyieldToleranceYield) ~PCA1 + PCA2 + elevation+ Salinity_class,data=bioclim)
-modelfit4.1<-lm(log(saltyieldToleranceYield) ~PCA1, data=bioclim) ## YES: p-value: .0291
-modelfit4.2<-lm(log(saltyieldToleranceYield) ~PCA2,data=bioclim) ###no 
-modelfit4.3<-lm(log(saltyieldToleranceYield) ~elevation,data=bioclim) ##no
-modelfit4.4<-lm(log(saltyieldToleranceYield) ~Salinity_class,data=bioclim) ###no-- so the total production of salty fruit is not correlated with the salt class--- BUT salt tolerance when looking at yield IS correlated with salt class??
-modelfit4.5<-lm(log(saltyieldToleranceYield) ~Lat,data=bioclim) ###yes: p-value: .047
-Anova(modelfit4.4) ### none are statistically significant?
+#4.Signifcant Salt Treatment to Environemnt-- not taking into account control #######################################
+modelfit4 <- lm (log(saltyieldToleranceYield+.001) ~PCA1 + PCA2 + elevation+ Salinity_class,data=bioclim)
+modelfit4.1<-lm(log(saltyieldToleranceYield+.001) ~PCA1, data=bioclim) 
+modelfit4.2<-lm(log(saltyieldToleranceYield+.001) ~PCA2,data=bioclim)
+modelfit4.3<-lm(log(saltyieldToleranceYield+.001) ~elevation,data=bioclim)
+modelfit4.4<-lm(log(saltyieldToleranceYield+.001) ~Salinity_class,data=bioclim) 
+modelfit4.5<-lm(saltyieldToleranceYield ~ Lat,data=bioclim) 
+Anova(modelfit4) ### none are statistically significant?
 
-forposterST<-merge(bioclim,bioclimsd, by="Accession")
+
 write.csv(forposterST, "Results.csv")
 
 
@@ -160,89 +140,27 @@ write.csv(forposterST, "Results.csv")
 
 
 ####I want to look at significance when seperating reps 
-
-bioclim<- bioclimSmallerPCA %>%
+bioclim2 <- bioclimfili %>%
   mutate(PCA1 = scores$PC1,
          PCA2=scores$PC2)
-bioclim<-merge(salsd,bioclim, by="Accession", all.x=FALSE)
-bioclim<-merge(elevationsd,bioclim,by="Accession",all.x=FALSE)
-bioclim<-merge(bioclim,STbyrep,by="Accession",all.x=TRUE)
-bioclim<-merge(saltyieldTolerance,bioclim,by="Accession",all.x=FALSE)
-tibble::view(STbyrep)
+bioclim2 <- bioclim2 %>%
+  distinct()
+bioclim2 <- left_join(STbyrep, bioclim2, by = "Accession",relationship =
+                        "many-to-many")
+tibble::view(bioclim2)
+names(bioclim2)
+
+modelfit1.1<- lm(log(STYield.x+.0001)~ PCA1),data=bioclim2) ### YES! p-value= .001474
+modelfit1.12<-lm(log(STYield.x+.0001) ~ Annual_Precip,data=bioclim2)
+modelfit1.2<- lm(log(STYield.x+.0001) ~ PCA2,data=bioclim2) ###no 
+modelfit1.3<- lm((STYield.x+.0001) ~ Salinity_class,data=bioclim2)
+modelfit1.4<- lm(log(STYield.x+.0001) ~ Lat,data=bioclim2) ## p-values: 0.02483
+anova(modelfit1.4)
 
 
+#5. Results of Fitness and Bioclim####
+## There is NO significant relationship between salt tolerance and geographic location :((
 
-
-
-
-
-
-
-#Results of Fitness and Bioclim####
-# it looks as if for Total Yield mass and Total Pods (which are extremely correlated with eachother), that PCA1, latitude, and salinity class are significantly correlated with the log (TotalPods/TotalYield). Total Biomass on the other hand is only correlated with PCA2 and 
-
-
-
---------------------------------------------------------------- ###dont know
-###dont remember whats going on here
-Loadings<-as.data.frame(pca.out2$rotation)
-Loadings
-biplot(pca.out2)
-rda.out <- vegan::rda(bioclimfili[,c(2:21)], scale = TRUE)
-rda_scores <- scores(rda.out)
-biplot(rda.out, 
-       display = "sites")
-biplot(rda.out, display = "sites")
-
-ordihull(rda.out,
-         group = AnnualPrecip$order,
-         col = 1:7,
-         lty = 1:7,
-         lwd = c(3,6))
-
-y<-rda(bioclimfili[,c(2:21)]) 
-
----------------------------------------------------------
-str(pca.out2)
-predict(pca.out2)
-
-
-###now trying psych???--- also dont know what I am doing here??
-library(psych)
-pc<-prcomp(bioclimfili[,c(2:21)],centr=TRUE,scale.=TRUE)
-attributes(pc)
-g <- ggbiplot(pc,
-              obs.scale = 1,
-              var.scale = 1,
-              groups = bioclimfili$Accession,
-              ellipse = TRUE,
-              circle = TRUE,
-              ellipse.prob = 0.68)
-
-g <- g + scale_color_discrete(name = '')
-g <- g + theme(legend.direction = 'horizontal',
-               legend.position = 'top')
-
------------------------------------------------------------ ###dont know
-
-
-#example
-p
-_ <- GGally::print_if_interactive
-df_x <- rnorm(100)
-df_y <- df_x + rnorm(100, 0, 0.1)
-df <- data.frame(x = df_x, y = df_y, c = sqrt(df_x^2 + df_y^2))
-pm <- ggpairs(
-  df,
-  columnLabels = c("alpha[foo]", "alpha[bar]", "sqrt(alpha[foo]^2 + alpha[bar]^2)")
-)
-p_(pm)
-
-pm <- ggpairs(
-  tst,
-  columnLabels = c("alpha[foo]", "alpha[bar]", "sqrt(alpha[foo]^2 + alpha[bar]^2)")
-)
-p_(pm)
 
 
 

@@ -38,15 +38,12 @@ library(factoextra)
 library(vegan)
 library(datacleanr)
 library(boot)
-packReq <- c(
-  "tidyverse", "naniar", "summarytools", "leaflet", "datacleanr", "supportR"
-)
+library(factoextra)
 library(naniar) # to homogenize missing value codes
 library(tidyverse) # general data wrangling
 library(supportR)
-librarian::shelf(packReq)
 
-install_version("Matrix", version = "1.6-4", repos = "http://cran.us.r-project.org")
+devtools::install_version("Matrix", version = "1.6-4", repos = "http://cran.us.r-project.org")
 
 getwd()
 
@@ -136,7 +133,6 @@ precipcoldestquarter<-raster("wc2.1_2.5m_bio_19.tif")
 
 #-- all of those that did not GERMINATE or were eaten by RATS will get NA values. All that died will get 0's 
 summedSeeds<-0
-tibble::view(seedsmerge)
 summedSeeds <- seeds %>%
   group_by(ID,Rep) %>%
   summarise(TotalSeeds = sum(NumSeeds, na.rm = TRUE), Pods = sum(numpods, na.rm = TRUE), AverageSeedsPerPod = mean(SeedperPod,na.rm=TRUE), AverageSeedWeight = mean(Weightseed,na.rm=TRUE), TotalSeedWeight=mean(SeedsWeight, na.rm=TRUE))
@@ -150,7 +146,6 @@ seedsmerge <- seedsmerge %>%
   dplyr::rename(Rep = Rep.x)   
 
 seedsmerge$TotalPods<-seedsmerge$Pods+seedsmerge$NumemptyPods+seedsmerge$Numgreenpods
-names(seedsmerge)
 seedsmerge<- seedsmerge%>%
   dplyr::select(ID,TotalSeeds,Rep,TotalPods,AverageSeedsPerPod,AverageSeedWeight,EC,Moisture,Numleaves,NumFlowers,NumemptyPods,Numgreenpods,TotalAboveDryMass,AboveWater,WF)
 
@@ -178,7 +173,7 @@ seedsmerge <- seedsmerge %>%
     ),
     TotalPods = case_when(
       Germ == 0 | ReasonofDeath == "RATS" ~ NA,
-      Germ == 1 & Alive == 0 & (TotalPods == 0| is.na(TotalPods)) ~ 0,
+      Germ == 1 & Alive == 0 & (TotalPods == 0| is.na(TotalPods))|(Germ == 0 & Species=="P. vulgaris") ~ 0,
       Germ==1 &Alive==1 & (is.na(TotalPods)| TotalPods>0) & is.na(TotalPods)~ 0,
       TRUE ~ TotalPods
     ),
@@ -211,8 +206,14 @@ seedsmerge <- seedsmerge %>%
 fitness<- seedsmerge%>%
   dplyr::select(ID,Idnum,Rep,Treatment, Germ, Accession,Alive,AverageSeedWeight,AverageSeedsPerPod, TotalPods,TotalAboveDryMass,Species)
 
+fitness<- fitness %>%
+  dplyr:: filter (Idnum != 18 & 28) ##none of 18 or 28 germinated
+
 fitnesfili<-fitness%>%
   dplyr::filter(Species=="P. filiformis")
+
+fitnessvulgaris<-fitness%>%
+  dplyr::filter(Species=="P. vulgaris")
 
 ###This is for predicting rep 3--- no longer need to do this
 anothercodesysSpecies<-anothercodesys%>%
@@ -259,21 +260,11 @@ fitness<-merge(fitness,anothercodesysSpecies,by="Accession")
 #fitness<-rbind(fitness,rep3)
 
 ###The formula we will by using is seeds/pod * #pods * weight/pod
-anothercodesysSpecies<-anothercodesys%>%
-  dplyr::select(Idnum,Species)
-
 
 fili<-fitness%>%
   dplyr::filter(Species.x=="P. filiformis")
 
-tibble::view(fili)
-
 #### 3. Predict NA's ####
-
-# How many zeros are there?
-sum(fili$TotalPods == 0, na.rm = TRUE) # There are 43 zeroes
-# There are 11 NAs
-
 
 ##Average Seed Weight
 fitnesmodelSeedWeight<-lmer(log(AverageSeedWeight)~Accession+Treatment+(1|Rep),data=fili ,na.action = "na.exclude")
@@ -281,15 +272,6 @@ PredicSeedWeight<-exp(predict (fitnesmodelSeedWeight, newdata = fili))
 fili <-fili %>%
   mutate(AverageSeedWeight = ifelse(is.na(AverageSeedWeight), PredicSeedWeight, AverageSeedWeight))
 
-plot(fitnesmodelSeedWeight)
-hist(fitnesmodelSeedWeight$residuals)
-Anova(fitnesmodelSeedWeight) ## seed weight correlated with accession but not treatment
-
-ggplot(fili, aes(AverageSeedWeight, PredicSeedWeight)) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  labs(x = "Observed values",
-       y = "Predicted values") ##looks good 
 
 
 ###glmer with rep being randomized-- keep NA's and zeros
@@ -303,11 +285,7 @@ fili <-fili %>%
 Anova(fitnesmodelPod) ##number of pods correlated with Accession and Treatment 
 
 # Predict values--TotalPods
-ggplot(fili, aes(TotalPods, PredicPod)) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  labs(x = "Observed values",
-       y = "Predicted values") ## I think looking good
+
 
 ### Now changing Number of SeedPods with predicted values
 fitnesmodelSeedPod<-lmer(log(AverageSeedsPerPod)~Accession+Treatment+ (1|Rep),data=fili ,na.action = "na.exclude")
@@ -315,24 +293,6 @@ fitnesmodelSeedPod<-lmer(log(AverageSeedsPerPod)~Accession+Treatment+ (1|Rep),da
 fili <-fili %>%
   mutate(naPredicSeedPod = exp(predict (fitnesmodelSeedPod, newdata = fili))) %>%
   mutate(AverageSeedsPerPod = ifelse(is.na(AverageSeedsPerPod), naPredicSeedPod, AverageSeedsPerPod))
-tibble::view(fili)
-
-
-
-hist(fitnesmodelSeedPod$residuals)
-
-Anova(fitnesmodelSeedPod) # Significant effects across accession
-ggplot(fili, aes(Treatment, AverageSeedsPerPod)) +
-  geom_boxplot() +
-  geom_point()
-names(fili)
-
-ggplot(fili, aes(AverageSeedsPerPod, naPredicSeedPod )) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  labs(x = "Observed values",
-       y = "Predicted values") ###looks good
-
 
 ### Above Ground Biomass-- a lot of missing data for rep 3 so won't do right now 
 fitnesmodelBiomass<-lmer(log(TotalAboveDryMass)~Accession+Treatment+ (1|Rep),data=fili ,na.action = "na.exclude")
@@ -344,42 +304,104 @@ fili <-fili %>%
 tibble::view(fili)
 
 write.csv(fili,"01fitness.csv")
+fitness <- fitness %>%
+  rename(Species= Species.x)%>%
+  dplyr::select( -Species.y)
+write.csv(fitness,"allfitness.csv")
 tibble::view(fili)
 
 
 
+#4. vulgaris + filiformis ####-- so for now, there were only 2 that didn't germinate, so I am just going to take the average of the 2 reps to fill it 
 
-#4. Looking at PCA as a fitness Score ####
+tibble::view(fitnessvulgaris)
+
+fitnessvulgaris<-fitness%>%
+  dplyr::filter(Species=="P. vulgaris")
+
+
+fitnessvulgaris<- fitnessvulgaris %>% mutate_all(~ ifelse(is.nan(.), NA, .))
+###average seed weight 
+
+fitnessvulgaris<- fitnessvulgaris %>%
+  group_by(Idnum, Treatment) %>%
+  dplyr::mutate(
+    mean_weight = mean(AverageSeedWeight, na.rm = TRUE),
+    mean_weight = ifelse(is.na(mean_weight), 0, mean_weight),
+    AverageSeedWeight = ifelse(is.na(AverageSeedWeight), mean_weight, AverageSeedWeight)
+  ) %>%
+  dplyr::select(-mean_weight) %>%
+  ungroup()
+
+###pods--- 0 inflated
+
+fitnessvulgaris<- fitnessvulgaris %>%
+  group_by(Idnum, Treatment) %>%
+  dplyr::mutate(
+    mean_pods = mean(TotalPods, na.rm = TRUE),
+    mean_pods = ifelse(is.na(mean_pods), 0, mean_pods),
+    TotalPods = ifelse(is.na(TotalPods), mean_pods, TotalPods)
+  ) %>%
+  dplyr::select(-mean_pods) %>%
+  ungroup()
+
+### Now changing Number of SeedPods with predicted values
+fitnessvulgaris<- fitnessvulgaris %>%
+  group_by(Idnum, Treatment) %>%
+  dplyr::mutate(
+    mean_seed = mean(AverageSeedsPerPod, na.rm = TRUE),
+    mean_seed  = ifelse(is.na(mean_seed ), 0, mean_seed ),
+    AverageSeedsPerPod = ifelse(is.na(AverageSeedsPerPod), mean_seed , AverageSeedsPerPod)
+  ) %>%
+  dplyr::select(-mean_seed ) %>%
+  ungroup()
+### Above Ground Biomass-- a lot of missing data for rep 3 so won't do right now 
+fitnesmodelBiomass<-lmer(log(TotalAboveDryMass)~Accession+Treatment+ (1|Rep),data=fili ,na.action = "na.exclude")
+
+fitnessvulgaris<- fitnessvulgaris %>%
+  group_by(Idnum, Treatment) %>%
+  dplyr::mutate(
+    mean_biomass = mean(TotalAboveDryMass, na.rm = TRUE),
+    mean_biomass = ifelse(is.na(mean_biomass), 0, mean_biomass),
+    TotalAboveDryMass = ifelse(is.na(TotalAboveDryMass), mean_biomass, TotalAboveDryMass)
+  ) %>%
+  dplyr::select(-mean_biomass) %>%
+  ungroup()
+
+fitness<-bind_rows(fitnessvulgaris,fili)
+fitness <- fitness %>%
+  mutate(Species = ifelse(is.na(Species), Species.x, Species))%>%
+  dplyr::select(-Species.x, -Species.y)
+fitness<-merge(fitness, anothercodesys[,3:4], by="Accession")
+write.csv(fitness,"allfitness.csv")
+
+
+#5. Looking at PCA as a fitness Score ####
 ## Need to redo with new data--- didn't save :(
 
 
 ##regular anova
 
 seedsmergeG <- seedsmerge%>%
-  filter(Germ == 1)
-view(seedsmergeG)
-anovapods<-lm(TotalPods~0+Rep+Accession,data=seedsmergeG)
+  dplyr::filter(Germ == 1)
+anovapods<-lm(TotalPods~0+Rep+Accession,data=fili)
 pred_df = expand.grid(Rep = unique (seedsmergeG$Rep),
                       Accession = unique (seedsmergeG$Accession))
 est_Pods <- predict(anovapods, pred_df)
 pred_df$est_Pods <-est_Pods
 
 pred_df
-pred_df2<-pred_df%>% dplyr::filter(Rep==2)
-pred_df2
+lmpred<-lm(est_Pods~Rep,data=pred_df)
+anova(lmpred)## significantly correlated with accession and with rep 
 
-pred_df2
+##variable for PCA 2---seeaccession##variable for PCA 2---seedsperpod
 
-##variable for PCA 2---seedsperpod
-names(seedsMerge)
-anova(anovaAverageSeedsPerPod)
-anovaAverageSeedsPerPod<-lm(AverageSeedsPerPod~ 0 + Rep + Accession,data=seedsmergeG)
+anovaAverageSeedsPerPod<-lm(AverageSeedsPerPod~ 0 + Rep + Accession,data=fili)
 predseedsperpod_df = expand.grid(Rep = unique (seedsmergeG$Rep),
                       Accession = unique (seedsmergeG$Accession))
 est_AverageSeedsPerPod <- predict(anovaAverageSeedsPerPod,predseedsperpod_df)
 predseedsperpod_df$est_AverageSeedsPerPod <-est_AverageSeedsPerPod
-predseedsperpod_df2<-predseedsperpod_df%>% filter(Rep==2)
-predseedsperpod_df2
+predseedsperpod_df
 
 
 
@@ -517,7 +539,13 @@ salsd<-data.frame(accession)
 salinity<-matrix(nrow=54,ncol=2)
 sal_at_coords<-terra::extract(sal,gps_coords)
 salsd$Salinity_class<-sal_at_coords
-salsd
+salsd <- salsd %>% rename(Accession = accession)
+salsd<-merge(salsd,anothercodesys, by="Accession")
+salsd<-salsd %>%
+  dplyr::filter(Species== "P. filiformis", Idnum!=39)
+salsd <- salsd %>%
+  distinct()
+
 
 ##bioclim
 
@@ -581,46 +609,54 @@ precip_coldest_quarter<- terra::extract(precipcoldestquarter,gps_coords)
 bioclimsd$Precip_Coolest_Quarter<-precip_coldest_quarter
 
 ##Terain Data
-elevationsd<-data.frame(accession)
 elevation<- terra::extract(elev,gps_coords)
-elevationsd
-elevationsd$elevation<-elevation
+elevation<-as.numeric(elevation)
+bioclimsd$elevation<-elevation
 
 slop<-terra::terrain(elev,"slope")
 slopee<-terra::extract(slop,gps_coords)
-sd$slope<-slopee
+slopee<- as.numeric(slopee)
+bioclimsd$slope<-slopee
 
 aspectt<-terra::terrain(elev,"aspect")
 asspectt<-terra::extract(aspectt,gps_coords)
-sd$aspect<-asspectt
+asspectt<-as.numeric(asspectt)
+bioclimsd$aspect<-asspectt
 
 roughnes<-terra::terrain(elev,"roughness")
 roghness<-terra::extract(roughnes,gps_coords)
-sd$roughness<-roghness
+roghness<-as.numeric(roghness)
+bioclimsd$roughness<-roghness
 
 TPpI<-terra::terrain(elev,"TPI")
 tpii<-terra::extract(TPpI,gps_coords)
-sd$TPI<-tpii
+tpii<-as.numeric(tpii)
+bioclimsd$TPI<-tpii
 
 TRIi<- terra::terrain(elev,"TRI")
 TRiIi<-terra::extract(TRIi,gps_coords)
-sd$TRI<-TRiIi
+TRiIi<-as.numeric(TRiIi)
+bioclimsd$TRI<-TRiIi
 
 flow_dirr<-terra::terrain(elev,"flowdir")
 flow_dirre<-terra::extract(flow_dirr,gps_coords)
-sd$flow_direction<-flow_dirre
+flow_dirre<-as.numeric(flow_dirre)
+bioclimsd$flow_direction<-flow_dirre
 
-tibble::view(bioclimsd)
 
+##only filiformis 
+
+names(bioclimsd)
+bioclimsd<-bioclimsd%>%
+  dplyr::filter(species=="P. filiformis")
+bioclimsd <- bioclimsd %>% dplyr::rename(Accession = accession) 
+bioclimsd<-merge(bioclimsd,salsd, by="Accession")
 write.csv(bioclimsd, "bioclimsd.csv")
 
 
 
 
-####finalized terrain dataframe####
-
-
-###6 Ggally####--bioclim
+###6.Ggally####
 bioclimsd
 names(bioclimsd)
 
@@ -707,7 +743,6 @@ bioclim<-merge(salsd,bioclim, by="Accession", all.x=FALSE)
 bioclim<-merge(elevationsd,bioclim,by="Accession",all.x=FALSE)
 bioclim<-merge(salttolerancePCA,bioclim,by="Accession",all.x=TRUE)
 bioclim<-merge(saltyieldTolerance,bioclim,by="Accession",all.x=FALSE)
-
 names(bioclim)
 
 
