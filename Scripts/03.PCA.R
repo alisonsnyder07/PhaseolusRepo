@@ -8,11 +8,15 @@ code<-read.csv("code.csv")
 saltyieldTolerance<-read.csv("saltyieldTolerance.csv")
 STbyrep<-read.csv("STbyRep.csv")
 GPSformap<-merge(gps,YieldST, by = "Accession")
+wannatry<-read.csv("forPCAyieldmass.csv")
+
+
 
 bioclimfili<-bioclimsd %>% 
   dplyr::filter(species== "P. filiformis") %>%
   dplyr::select(-AnnualPrecip.AnnualPrecipitation,-AnnualPrecip.Accession,-species)
 bioclimfili<-merge(bioclimfili,YieldST, by= "Accession")
+
 
 names(bioclimfili)
 
@@ -54,7 +58,14 @@ bioclim <- bioclimfili %>%
          PCA2=scores$PC2)
 bioclim<-merge(saltyieldTolerance,bioclim,by="Accession",all.x=FALSE)
 names(bioclim)### bioclim now has the 11 bioclim variables, the 2 PC that describe 98% of the variation across the populations, salt index value and elevation###
-
+wannatry<-merge(bioclim,wannatry, by = "Accession",all.x=FALSE)
+names(wannatry)
+totalyieldlm1<-lmer(log(AverageYieldMass)~PCA2+(1|Treatment),data=wannatry)
+Anova(totalyieldlm1) ##p-value: .08595
+totalyieldlm2<-lmer(log(AverageYieldMass)~PCA2+(1|Treatment),data=wannatry)
+Anova(totalyieldlm2) ##p-value: .06084
+totalyieldlm3<-lmer(log(AverageYieldMass)~Accession+(1|Treatment),data=wannatry)
+Anova(totalyieldlm3) ##p-value: .06084
 
 ###how to the two salt variables compare to eachother
 tibble::view(bioclim)
@@ -69,21 +80,58 @@ Anova(STparam)##extremely correlated, good
 ##3.model of prediciting values for salt tolerance and bioclim relationship ####
 
 ##totalYield
-tibble::view(bioclim)
+
 modelfit1 <- lm (log(STYield) ~ PCA1 + PCA2 + elevation+ Salinity_class,data=bioclim)
 modelfit1.1<- lm (log(STYield)~ PCA1,data=bioclim) 
 modelfit1.12<-lm (log(STYield) ~ Annual_Precip,data=bioclim)
 modelfit1.2<- lm (log(STYield) ~ PCA2,data=bioclim) 
 modelfit1.3<- lm ((STYield) ~ Salinity_class,data=bioclim)
 modelfit1.4<- lm (log(STYield) ~ Lat,data=bioclim) 
-anova(modelfit1)
+anova(modelfit1.2)
 
 
-ggplot(bioclim, aes(x=log(STYield), y = Lat))+
+ggplot(bioclim, aes(x= PCA1, y = STYield))+
   geom_point()+
-  geom_smooth(method="lm", se=FALSE)+
-  stat_regline_equation(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~~")),
-                        label.x = -1, label.y = 0)
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  stat_regline_equation(label.x = 200, label.y = 2, aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")), 
+                        formula = y ~ x, size = 4, color = "black")+
+  ylim(0,2.5)+
+  labs(title= "Linear model relationship between Salt Tolerance (g seed) and 1st Principle Component of " ~italic("P.filiformis"), x= "1st Principle Component of bioclimactic and geographic variables", y= "Salt Tolerance")+
+  theme(
+    panel.background = element_blank(), # Remove panel background
+    panel.grid.major = element_line(color = "grey80"), # Customize major gridlines
+    panel.grid.minor = element_line(color = "grey90"), # Customize minor gridlines
+    panel.border = element_blank(), # Remove panel border
+    strip.background = element_blank(),
+    strip.text = element_text(family="Nunito",size = 10),
+    text = element_text(family = "Nunito"),
+    axis.text = element_text(family = "Nunito", size = 10), 
+    legend.text = element_text(family = "Nunito", size = 10), 
+    plot.title = element_text(family = "Nunito", size = 10),
+    legend.title = element_text(family = "Nunito", size = 10))
+
+
+ggplot(bioclim, aes(x= PCA2, y = STYield))+
+  geom_point()+
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  stat_regline_equation(label.x = 500, label.y = 1.5, aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")), 
+                        formula = y ~ x, size = 4, color = "black")+
+  ylim(0,2.5)+
+  labs(title= "Linear model relationship between Salt Tolerance (g seed) and 2nd Principle Component of " ~italic("P.filiformis"), x= "2nd Principle Component of Bioclimactic and geographic variables", y= "Salt Tolerance")+
+  theme(
+    panel.background = element_blank(), # Remove panel background
+    panel.grid.major = element_line(color = "grey80"), # Customize major gridlines
+    panel.grid.minor = element_line(color = "grey90"), # Customize minor gridlines
+    panel.border = element_blank(), # Remove panel border
+    strip.background = element_blank(),
+    strip.text = element_text(family="Nunito",size = 10),
+    text = element_text(family = "Nunito"),
+    axis.text = element_text(family = "Nunito", size = 10), 
+    legend.text = element_text(family = "Nunito", size = 10), 
+    plot.title = element_text(family = "Nunito", size = 10),
+    legend.title = element_text(family = "Nunito", size = 10))
+
+
 
 ##totalPods
 names(bioclim)
@@ -150,12 +198,13 @@ bioclim2 <- left_join(STbyrep, bioclim2, by = "Accession",relationship =
 tibble::view(bioclim2)
 names(bioclim2)
 
-modelfit1.1<- lm(log(STYield.x+.0001)~ PCA1),data=bioclim2) ### YES! p-value= .001474
+modelfit1.1<- lm((log(STYield.x+.0001)~ PCA1), data=bioclim2)
 modelfit1.12<-lm(log(STYield.x+.0001) ~ Annual_Precip,data=bioclim2)
 modelfit1.2<- lm(log(STYield.x+.0001) ~ PCA2,data=bioclim2) ###no 
 modelfit1.3<- lm((STYield.x+.0001) ~ Salinity_class,data=bioclim2)
 modelfit1.4<- lm(log(STYield.x+.0001) ~ Lat,data=bioclim2) ## p-values: 0.02483
-anova(modelfit1.4)
+anova(modelfit1.5)
+
 
 
 #5. Results of Fitness and Bioclim####

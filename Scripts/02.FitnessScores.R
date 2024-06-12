@@ -1,6 +1,6 @@
 setwd("C:/Users/asnyder/Desktop/P. filiformis/PhaseolusRepo/Data")
 
-fili<-read.csv("01fitness.csv")
+fili<-read.csv("filifitness.csv")
 seedsmerge<-read.csv("seedsmerge.csv")
 allfitness<-read.csv("allfitness.csv")
 
@@ -13,6 +13,9 @@ fitnessscore1$TotalSeeds<-fitnessscore1$TotalPods *fitnessscore1$AverageSeedsPer
 
 fitnessscore1<- fitnessscore1 %>%
   dplyr::select(Idnum,ID ,Rep, Treatment, Germ, Accession, Alive,TotalAboveDryMass, AverageSeedWeight,AverageSeedsPerPod,TotalPods, TotalSeeds, TotalYieldMass)
+
+write.csv(fitnessscore1, "filifitnessforposter.csv")
+
 
 ##Average Fitness Long
 
@@ -48,21 +51,35 @@ fitnessscore1$Treatment_Rep <- interaction(fitnessscore1$Treatment, fitnessscore
 ggplot(fitnessscore1 ,aes( x=Treatment_Rep,y=TotalYieldMass, fill=Treatment))+
   geom_bar(stat = "summary", fun = "mean") +
   facet_wrap(~Accession)+
-  scale_fill_manual(values = c("S" = "red", "C" = "blue"))+ # Add error bars
-  labs(title = "Difference In Total Mass Yield (g yield) by Phaseolus filiformis Accession and Treatment",
-       x = "Category",
-       y = "Value") +
+  scale_fill_manual(values = c("S" = "red", "C" = "blue"))+
   theme_minimal()+
+  labs(title = "Difference In Total Mass Yield (g yield) by Phaseolus filiformis Accession and Treatment, showing every replicate plant ",
+       x = "Replicated Accession",
+       y = "") +
+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))+
+  
   ylim(0,5) 
 
-###difference by Rep####
-ggplot(fitnessscore1 ,aes( x=Treatment_Rep,y=TotalYieldMass, fill=Treatment))+
+###difference by Re - 
+ggplot(fitnessyield_averageacrossreps ,aes( x=Treatment_Rep,y=TotalYieldMass, fill=Treatment))+
   geom_bar(stat = "summary", fun = "mean") +
   scale_fill_manual(values = c("S" = "red", "C" = "blue"))+ # Add error bars
-  labs(title = "Difference In Total Mass Yield (g yield) by Phaseolus filiformis Rep and Treatment",
+  labs(title = "Difference In Total Mass Yield (g yield) by "~italic("Phaseolus filiformis")~"Rep and Treatment",
        x = "Category",
        y = "Value") +
   theme_minimal()+
+  labs(title= "Difference in Salt Tolerance of"  ~ italic("Phaseolus")~ "across Species", y="Salt Tolerance Index", x="Species", legend = "Species", fill= "Species")+
+  theme(panel.grid.major = element_blank(),
+        strip.background = element_blank(),  
+        strip.text = element_text(family="Nunito",size = 14),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        text = element_text(family = "Nunito"),
+        axis.text = element_text(family = "Nunito", size = 14), 
+        legend.text = element_text(family = "Nunito", size = 16), 
+        plot.title = element_text(family = "Nunito", size = 16),
+        legend.title = element_text(family = "Nunito", size = 16))
+
   ylim(0,5) 
 
 
@@ -72,11 +89,11 @@ fitnessyield_ <- fitnessscore1 %>%
   summarise(AverageYieldMass = mean(TotalYieldMass),
             StandardDeviation = sd(TotalYieldMass),
             SE=StandardDeviation/sqrt(n()))
+write.csv(fitnessyield_,"forPCAyieldmass.csv")
 
 
 ####Seperated by Rep-- short to long: Yield Mass 
 
-names(fitnessscore1)
 
 YieldC<- fitnessscore1 %>%
   dplyr::filter(Treatment == "C")
@@ -89,7 +106,8 @@ controlvsalt_yield$Rep<-YieldC$Rep
 controlvsalt_yield$c_TotalYieldMass<-YieldC$TotalYieldMass
 controlvsalt_yield$s_TotalYieldMass<-YieldS$TotalYieldMass
 controlvsalt_yield$STYield<-YieldS$TotalYieldMass/YieldC$TotalYieldMass
-controlvsalt_yield$STYield <- replace(controlvsalt_yield$STYield, !is.finite(controlvsalt_yield$STYield), 1)
+  controlvsalt_yield$STYield <- replace(controlvsalt_yield$STYield, !is.finite(controlvsalt_yield$STYield), 1)
+controlvsalt_yield$STYield2 <- replace(controlvsalt_yield$STYield2, !is.finite(controlvsalt_yield$STYield2), 1)
 
 controlvsalt_yield $c_Totalseeds <-YieldC$TotalSeeds
 controlvsalt_yield $s_Totalseeds <-YieldS$TotalSeeds
@@ -110,14 +128,36 @@ controlvsalt_yield<- controlvsalt_yield%>%
   distinct()
 write.csv(controlvsalt_yield,"STrepseperate.csv")
 
+totalyieldlm<-lmer(c_TotalYieldMass~Accession+(1|Rep),data=controlvsalt_yield)
+Anova(totalyieldlm)##0.0803
+totalyieldlm<-lmer(s_TotalYieldMass~Accession+(1|Rep),data=controlvsalt_yield)
+Anova(totalyieldlm)##0.259
 
 ## not seperated by rep 
 ggplot(controlvsalt_yield, aes(x=c_TotalYieldMass, y= s_TotalYieldMass,color= Accession))+
   geom_point()+
   geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red")
 
-saltTolerancecorrelation<-lm(STYield~Accession, data=controlvsalt_yield)
-anova(saltTolerancecorrelation)
+saltTolerancecorrelation<-lmer(log(STYield+.001)~Accession+(1|Rep), data=controlvsalt_yield)
+anova(saltTolerancecorrelation) ## not even correlated by accession
+
+###difference by rep-- salt tolerance 
+ggplot(controlvsalt_yield,aes(x=Rep, y=STYield))+
+  geom_bar(stat = "summary",fill="purple")+
+  facet_wrap(~Accession)+
+  labs(title = "Salt Tolerance by Accession across replicates of "~italic("Phaseolus filiformis"),
+       x = "Category",
+       y = "Value")+
+  theme_minimal()+
+  theme(
+        strip.text = element_text(family="Nunito",size = 14),
+        text = element_text(family = "Nunito"),
+        axis.text = element_text(family = "Nunito", size = 10), 
+        legend.text = element_text(family = "Nunito", size = 16), 
+        plot.title = element_text(family = "Nunito", size = 16),
+        legend.title = element_text(family = "Nunito", size = 16))
+
+
 write.csv(controlvsalt_yield, "STbyRep.csv")
 
 #Linear Regression Significance ####
@@ -129,14 +169,14 @@ mod1S <-lmer(log(TotalYieldMass+0.00001) ~ 0+ Accession + (1|Rep), data = fitnes
 
 Anova(mod1S) ##p-value = .09162
 
-##looking at only total pods
+##looking at only total pods--- kind of interesting??
 mod1SPods <-lmer((TotalPods+0.00001) ~ 0+ Accession + (1|Rep), data = fitnessscore1 %>%
                dplyr::filter(Treatment == 'S' & Germ ==1))
 Anova(mod1SPods)## .04!!
 
 
 ##total seeds
-mod1Sseeds <-lmer((TotalSeeds+0.00001) ~ 0+ Accession + (1|Rep), data = fitnessscore1 %>%
+mod1Sseeds <-lmer((TotalSeeds+0.00001) ~ 0+ Accession + (1|Rep) , data = fitnessscore1 %>%
                    dplyr::filter(Treatment == 'S' & Germ ==1))
 Anova(mod1Sseeds) #p-value= .03804
 
@@ -163,16 +203,7 @@ write.csv(saltyieldTolerance,"saltyieldTolerance.csv")
 
 ###this is looking at total yield not seperating by treatment 
 mod2<-lmer(log(TotalYieldMass+0.001)~Accession + (1|Rep) + Treatment,data=fitnessscore1)
-Anova(mod2)
-
-
-
-
-
-saltyieldTolerance<-data.frame(unique(YieldC$Accession))
-saltyieldTolerance <- saltyieldTolerance %>% rename(Accession = unique.YieldC.Accession.)
-
-
+Anova(mod2)## no significant relationship between yield and accession-- SAD
 
 ##this is in long format to compare the salt and the control versus the last was for comparing across accessions
 controlvsalt_yieldR <- controlvsalt_yield %>%
@@ -203,6 +234,7 @@ controlvsalt_yieldR <- controlvsalt_yield %>%
             #SESB=StandardDeviation_C/sqrt(n())) ##yield
 
 write.csv(controlvsalt_yieldR,"controlvsalt_yieldR.csv")
+
 ###total yield-- going in poster 
 ggplot(controlvsalt_yieldR, aes(x=AverageYieldMass_C, y=AverageYieldMass_S, color=Accession))+ 
   geom_errorbar(data=controlvsalt_yieldR, aes(xmin=(AverageYieldMass_C -SECY), 
@@ -216,17 +248,6 @@ ggplot(controlvsalt_yieldR, aes(x=AverageYieldMass_C, y=AverageYieldMass_S, colo
 
 
 
-
-
-
-
-
-
-modseedsvyield<-lmer(log(TotalYieldMass+0.001)~Accession + (1|Rep) + Treatment ,data=fitnessscore1)
-Anova(modseedsvyield)
-
-
-
 ##total seeds
 ggplot(controlvsalt_yieldR, aes(x=AverageSeeds_C, y=AverageSeeds_S, color=Accession))+ 
   geom_errorbar(data=controlvsalt_yieldR, aes(xmin=(AverageYieldMass_C -SECY), 
@@ -236,9 +257,12 @@ ggplot(controlvsalt_yieldR, aes(x=AverageSeeds_C, y=AverageSeeds_S, color=Access
   geom_point()+
   geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red")
 
+
 ### which one
-modseedsvyield<-lm(TotalYieldMass~Accession + (1|Rep) + Treatment  ,data=fitnessscore1)
+modseedsvyield<-lm(TotalYieldMass~Accession+ (1|Rep) +Treatment  ,data=fitnessscore1)
 anova(modseedsvyield) #Accession p-value = .003166, treatment p-value= 2.39e-06
+
+
 
 ###conclusion: which ever...
 
@@ -282,10 +306,8 @@ fitnessscoreVulg <- allfitness
 fitnessscoreVulg$TotalYieldMass <- fitnessscoreVulg$AverageSeedWeight * fitnessscoreVulg$TotalPods *fitnessscoreVulg$AverageSeedsPerPod
 fitnessscoreVulg$TotalSeeds<-fitnessscoreVulg$TotalPods *fitnessscoreVulg$AverageSeedsPerPod
 
-controlvsalt_yieldV$Species
-
 fitnessscoreVulg <- fitnessscoreVulg  %>%
-  dplyr::select(Idnum,ID ,Rep, Treatment, Germ, Accession, Alive,TotalAboveDryMass, AverageSeedWeight,AverageSeedsPerPod,TotalPods, TotalYieldMass,Species)
+  dplyr::select(Idnum,ID ,Rep, Treatment, Germ, Accession, Alive,TotalAboveDryMass, AverageSeedWeight,AverageSeedsPerPod,TotalPods, TotalYieldMass,Species,WvC)
 
 
 YieldC<- fitnessscoreVulg %>%
@@ -313,6 +335,10 @@ controlvsalt_yieldV$s_Biomass<-YieldS$TotalAboveDryMass
 controlvsalt_yieldV$STBiomass<-YieldS$TotalBiomass/YieldC$TotalBiomass
 controlvsalt_yieldV$STBiomass <- replace(controlvsalt_yield$STBiomass, !is.finite(controlvsalt_yield$STBiomass), 1)
 
+
+####significance of accession to STYield -- this is vulgaris :()
+totalyieldlm<-lmer(log(STYield+.001)~Accession+(1|Rep),data=controlvsalt_yieldV)
+Anova(totalyieldlm)
 
 controlvsalt_yieldVulg <- controlvsalt_yieldV %>%
   group_by(Accession) %>%
