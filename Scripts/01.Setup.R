@@ -2,7 +2,7 @@
 # by Alison, Spring 2024
 
 
-
+###There is a command 
 #### 1. Setup ####
 # Libraries
 library(naniar) # to homogenize missing value codes
@@ -42,7 +42,6 @@ library(factoextra)
 library(naniar) # to homogenize missing value codes
 library(tidyverse) # general data wrangling
 library(supportR)
-https://github.com/alisonsnyder07/PhaseolusRepo.git
 
 devtools::install_version("Matrix", version = "1.6-4", repos = "http://cran.us.r-project.org")
 
@@ -220,6 +219,7 @@ fitnessvulgaris<-fitness%>%
 anothercodesysSpecies<-anothercodesys%>%
   dplyr::select(Species,Accession)
 
+
 fitness<-merge(fitness,anothercodesysSpecies,by="Accession")
 
 #rep3 = fitness %>%
@@ -273,8 +273,6 @@ PredicSeedWeight<-exp(predict (fitnesmodelSeedWeight, newdata = fili))
 fili <-fili %>%
   mutate(AverageSeedWeight = ifelse(is.na(AverageSeedWeight), PredicSeedWeight, AverageSeedWeight))
 
-
-
 ###glmer with rep being randomized-- keep NA's and zeros
 
 fitnesmodelPod<-glmer(TotalPods~Accession+Treatment+(1|Rep),data=fili, family=poisson(),na.action = "na.exclude")
@@ -283,7 +281,7 @@ sum(is.na(fili$TotalPods), na.rm = TRUE)
 
 fili <-fili %>%
   mutate(TotalPods = ifelse(is.na(TotalPods), PredicPod, TotalPods))
-Anova(fitnesmodelPod) ##number of pods correlated with Accession and Treatment 
+
 
 # Predict values--TotalPods
 
@@ -308,16 +306,16 @@ write.csv(fili,"filifitness.csv")
 fitness <- fitness %>%
   rename(Species= Species.x)%>%
   dplyr::select( -Species.y)
+write.csv(fitness,"allfitness.csv")
 
 
-#4. vulgaris + filiformis ####
+
+#4. vulgaris + filiformis ####-- so for now, there were only 2 that didn't germinate, so I am just going to take the average of the 2 reps to fill it 
 
 
 fitnessvulgaris<-fitness%>%
   dplyr::filter(Species=="P. vulgaris")
 
-
-fitnessvulgaris<- fitnessvulgaris %>% mutate_all(~ ifelse(is.nan(.), NA, .))
 ###average seed weight 
 
 fitnessvulgaris<- fitnessvulgaris %>%
@@ -330,7 +328,7 @@ fitnessvulgaris<- fitnessvulgaris %>%
   dplyr::select(-mean_weight) %>%
   ungroup()
 
-###pods--- 0 inflated
+###pods
 
 fitnessvulgaris<- fitnessvulgaris %>%
   group_by(Idnum, Treatment) %>%
@@ -353,7 +351,6 @@ fitnessvulgaris<- fitnessvulgaris %>%
   dplyr::select(-mean_seed ) %>%
   ungroup()
 ### Above Ground Biomass-- a lot of missing data for rep 3 so won't do right now 
-fitnesmodelBiomass<-lmer(log(TotalAboveDryMass)~Accession+Treatment+ (1|Rep),data=fili ,na.action = "na.exclude")
 
 fitnessvulgaris<- fitnessvulgaris %>%
   group_by(Idnum, Treatment) %>%
@@ -475,11 +472,15 @@ masterstack<-c(annualtemp,meandiurnalrange,isotherm,tempseason,maxtempwarm,minte
 gps
 sspecies<-gps$Species
 accession<-gps$Accession
+bioclimsd<- bioclimsd %>% rename(Accession = accession)
 
 lat<-gps$Lat
 long<-gps$Long
+lat
+long
 gps_coor<- data.frame(Name=accession, Latitude = lat, Longitide=long)
 gps_coords<-SpatialPoints(data.frame(x=long,y=lat), proj4string = CRS("+proj=longlat +datum=WGS84 +no_defs "))
+class(gps_coords)
 
 ## making a matrix of all of the precipitation data for every month at each accession coordinate
 bioclimsd<-data.frame(accession)
@@ -488,9 +489,12 @@ precip_at_coords<-terra::extract(precip_stack,gps_coords)
 class(precip_at_coords)
 np_rows<-nrow(precip_at_coords)
 np_cols<-ncol(precip_at_coords)
+np_rows
 combine_precip <- matrix(nrow=45,ncol=2)
 colnames(combine_precip) <- c("Accession", "AnnualPrecipitation")
 combine_precip[,1]<-accession
+combine_precip
+class(precip_at_coords)
 
 
 x<-0
